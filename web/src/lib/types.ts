@@ -78,3 +78,14 @@ export interface StreamLine {
   input?: string;
   result?: string;
 }
+
+export function kalshiUrl(ticker: string): string {
+  // Derive event ticker: everything before the second hyphen-group
+  // KXBONDIOUT-26APR-APR05 → event = KXBONDIOUT
+  // KXDEREMEROUT-26-MAY01 → event = KXDEREMEROUT
+  // KXHIGHNY-26APR04-T75 → event = KXHIGHNY
+  const parts = ticker.split("-");
+  const event = parts[0].toLowerCase();
+  const full = ticker.toLowerCase();
+  return `https://kalshi.com/markets/${event}/${full}`;
+}

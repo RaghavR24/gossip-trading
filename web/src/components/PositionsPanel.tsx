@@ -1,8 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { ExternalLink, ChevronDown, ChevronRight } from "lucide-react";
 import type { Trade } from "@/lib/types";
+import { kalshiUrl } from "@/lib/types";
 
 interface PositionsPanelProps {
   positions: Trade[];
@@ -21,40 +24,7 @@ export function PositionsPanel({ positions, trades }: PositionsPanelProps) {
             </p>
           )}
           {positions.map((t) => (
-            <div
-              key={t.id}
-              className="p-3 rounded-lg mb-1.5 bg-secondary/30 hover:bg-secondary/50 transition-colors"
-            >
-              <div className="flex items-center justify-between mb-1">
-                <span className="font-mono text-xs font-semibold truncate mr-2">
-                  {t.ticker}
-                </span>
-                <Badge
-                  variant={t.side === "yes" ? "default" : "destructive"}
-                  className="text-[10px] h-4 px-1.5"
-                >
-                  {t.side.toUpperCase()}
-                </Badge>
-              </div>
-              <p className="text-[10px] text-muted-foreground truncate mb-2">
-                {t.title}
-              </p>
-              <div className="flex items-center gap-3 text-[10px]">
-                <span className="text-muted-foreground">
-                  {t.contracts}x @ ${t.entry_price.toFixed(2)}
-                </span>
-                <span
-                  className={
-                    t.edge > 0 ? "text-primary" : "text-destructive"
-                  }
-                >
-                  {(t.edge * 100).toFixed(1)}pp edge
-                </span>
-                <span className="text-muted-foreground/60 capitalize">
-                  {t.confidence}
-                </span>
-              </div>
-            </div>
+            <PositionCard key={t.id} trade={t} />
           ))}
         </div>
 
@@ -67,9 +37,12 @@ export function PositionsPanel({ positions, trades }: PositionsPanelProps) {
             </div>
             <div className="px-2 pb-2">
               {trades.slice(0, 15).map((t) => (
-                <div
+                <a
                   key={t.id}
-                  className="flex items-center justify-between px-3 py-2 rounded-md hover:bg-secondary/30 transition-colors"
+                  href={kalshiUrl(t.ticker)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-between px-3 py-2 rounded-md hover:bg-secondary/30 transition-colors group"
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <span
@@ -83,7 +56,9 @@ export function PositionsPanel({ positions, trades }: PositionsPanelProps) {
                     >
                       {t.outcome === "win" ? "+" : t.outcome === "loss" ? "-" : "~"}
                     </span>
-                    <span className="font-mono text-[11px] truncate">{t.ticker}</span>
+                    <span className="font-mono text-[11px] truncate group-hover:text-primary transition-colors">
+                      {t.ticker}
+                    </span>
                     <span
                       className={`text-[10px] ${t.side === "yes" ? "text-primary/70" : "text-destructive/70"}`}
                     >
@@ -104,12 +79,87 @@ export function PositionsPanel({ positions, trades }: PositionsPanelProps) {
                       {formatRelativeTime(t.timestamp)}
                     </span>
                   </div>
-                </div>
+                </a>
               ))}
             </div>
           </>
         )}
       </ScrollArea>
+    </div>
+  );
+}
+
+function PositionCard({ trade: t }: { trade: Trade }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div className="rounded-lg mb-1.5 bg-secondary/30 hover:bg-secondary/50 transition-colors">
+      <div
+        className="p-3 cursor-pointer"
+        onClick={() => setExpanded(!expanded)}
+      >
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-1.5 min-w-0">
+            {expanded ? (
+              <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
+            ) : (
+              <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+            )}
+            <a
+              href={kalshiUrl(t.ticker)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-mono text-xs font-semibold truncate hover:text-primary transition-colors flex items-center gap-1"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {t.ticker}
+              <ExternalLink className="h-2.5 w-2.5 opacity-40" />
+            </a>
+          </div>
+          <Badge
+            variant={t.side === "yes" ? "default" : "destructive"}
+            className="text-[10px] h-4 px-1.5"
+          >
+            {t.side.toUpperCase()}
+          </Badge>
+        </div>
+        <p className="text-[10px] text-muted-foreground truncate mb-2 pl-4">
+          {t.title}
+        </p>
+        <div className="flex items-center gap-3 text-[10px] pl-4">
+          <span className="text-muted-foreground">
+            {t.contracts}x @ ${t.entry_price.toFixed(2)}
+          </span>
+          <span
+            className={t.edge > 0 ? "text-primary" : "text-destructive"}
+          >
+            {(t.edge * 100).toFixed(1)}pp edge
+          </span>
+          <span className="text-muted-foreground/60 capitalize">
+            {t.confidence}
+          </span>
+        </div>
+      </div>
+
+      {expanded && t.reasoning && (
+        <div className="px-3 pb-3 pt-0">
+          <div className="bg-background/50 rounded-md p-2.5 ml-4">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium mb-1.5">
+              Reasoning
+            </p>
+            <p className="text-[11px] text-foreground/80 whitespace-pre-wrap leading-relaxed">
+              {t.reasoning}
+            </p>
+            {t.estimated_prob > 0 && (
+              <div className="mt-2 flex gap-3 text-[10px] text-muted-foreground">
+                <span>Est: {(t.estimated_prob * 100).toFixed(0)}%</span>
+                <span>Market: {(t.entry_price * 100).toFixed(0)}%</span>
+                <span>Edge: {(t.edge * 100).toFixed(1)}pp</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

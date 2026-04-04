@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ArrowUpDown } from "lucide-react";
 import type { Market } from "@/lib/types";
+import { kalshiUrl } from "@/lib/types";
 
 interface MarketScannerProps {
   markets: Market[];
@@ -56,12 +57,19 @@ export function MarketScanner({ markets }: MarketScannerProps) {
                 className="border-b border-border/30 hover:bg-secondary/30 transition-colors"
               >
                 <td className="px-3 py-1.5">
-                  <div className="font-mono font-medium truncate max-w-[120px]">
-                    {m.ticker}
-                  </div>
-                  <div className="text-muted-foreground/40 truncate max-w-[120px]">
-                    {m.title}
-                  </div>
+                  <a
+                    href={kalshiUrl(m.ticker)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block hover:text-primary transition-colors"
+                  >
+                    <div className="font-mono font-medium truncate max-w-[120px]">
+                      {m.ticker}
+                    </div>
+                    <div className="text-muted-foreground/40 truncate max-w-[120px]">
+                      {m.title}
+                    </div>
+                  </a>
                 </td>
                 <td className="text-right px-2 py-1.5 font-mono text-muted-foreground">
                   {m.yes_bid.toFixed(0)}
