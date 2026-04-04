@@ -40,6 +40,10 @@ DEMO_BASE = "https://demo-api.kalshi.co/trade-api/v2"
 def get_base_url() -> str:
     return DEMO_BASE if os.getenv("KALSHI_USE_DEMO", "").lower() == "true" else PROD_BASE
 
+def get_read_url() -> str:
+    """Always use prod for reading market data (public, no auth). Demo data is stale/fake."""
+    return PROD_BASE
+
 def log(msg: str) -> None:
     print(msg, file=sys.stderr)
 
@@ -85,7 +89,8 @@ MAX_RETRIES = 3
 BASE_DELAY = 1.0
 
 async def api_get(session: aiohttp.ClientSession, path: str, params: dict | None = None, auth: bool = False) -> dict:
-    url = f"{get_base_url()}{path}"
+    base = get_base_url() if auth else get_read_url()
+    url = f"{base}{path}"
     headers = {"Accept-Encoding": "gzip", "Content-Type": "application/json"}
     if auth:
         headers.update(build_auth_headers("GET", f"/trade-api/v2{path}"))

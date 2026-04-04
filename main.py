@@ -38,22 +38,22 @@ Check data/user_rationales.json for any pending user theses to research.
 
 Then run a full trading cycle:
 
-1. Check your portfolio — run `python3 gossip/trader.py portfolio`
+1. Check your portfolio — run `PYTHONPATH=. python3 gossip/trader.py portfolio`
 
 2. For each open position, research whether the thesis still holds.
    Use web search to find latest news. Exit if thesis is dead.
 
-3. Scan Kalshi markets — run `python3 gossip/kalshi.py scan --limit 30`
+3. Scan Kalshi markets — run `PYTHONPATH=. python3 gossip/kalshi.py scan --limit 30`
    Look at what's available. What categories look interesting today?
 
 4. Pick the most promising markets and research them:
    - Use web search to find relevant news and data
-   - Use `python3 gossip/news.py --keywords "..."` for broader news scraping
+   - Use `PYTHONPATH=. python3 gossip/news.py --keywords "..."` for broader news scraping
    - Read primary sources — follow links, extract data
    - Estimate the true probability based on evidence
 
 5. If you find edge > 10pp with clear reasoning, trade:
-   `python3 gossip/trader.py trade TICKER --side yes/no --estimate 0.XX --confidence high/medium --reasoning "..."`
+   `PYTHONPATH=. python3 gossip/trader.py trade TICKER --side yes/no --estimate 0.XX --confidence high/medium --reasoning "..."`
 
 6. Update data/strategy_notes.md with what you learned this cycle.
 
@@ -78,8 +78,8 @@ Your job:
 6. Update data/user_rationales.json with your findings.
 7. Update data/strategy_notes.md if you learned something new.
 
-Check portfolio first: `python3 gossip/trader.py portfolio`
-Scan markets: `python3 gossip/kalshi.py scan` or `python3 gossip/kalshi.py search "relevant keywords"`
+Check portfolio first: `PYTHONPATH=. python3 gossip/trader.py portfolio`
+Scan markets: `PYTHONPATH=. python3 gossip/kalshi.py scan` or `PYTHONPATH=. python3 gossip/kalshi.py search "relevant keywords"`
 """
 
 
@@ -106,6 +106,7 @@ def run_agent(prompt: str, timeout: int = 600) -> dict:
     env = {k: v for k, v in os.environ.items() if k not in {
         "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT",
     }}
+    env["PYTHONPATH"] = str(PROJECT_DIR)
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     # Clear live log for this cycle

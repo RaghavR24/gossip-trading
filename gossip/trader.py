@@ -230,18 +230,26 @@ async def execute_trade(
     if not orderbook:
         orderbook = await fetch_orderbook(ticker)
 
-    yes_bids = orderbook.get("yes", []) if orderbook else []
-    no_bids = orderbook.get("no", []) if orderbook else []
+    # Orderbook uses yes_dollars/no_dollars (each entry: [price_str, quantity_str])
+    yes_bids = orderbook.get("yes_dollars", orderbook.get("yes", [])) if orderbook else []
+    no_bids = orderbook.get("no_dollars", orderbook.get("no", [])) if orderbook else []
 
-    # Market summary prices (may be stale)
+    # Market summary prices
     summary_bid = float(market.get("yes_bid_dollars", "0") or "0")
     summary_ask = float(market.get("yes_ask_dollars", "0") or "0")
 
-    # Best bid/ask from orderbook (more accurate)
-    ob_yes_bid = max((float(b[0]) / 100 for b in yes_bids), default=summary_bid) if yes_bids else summary_bid
-    ob_yes_ask = min((float(a[0]) / 100 for a in no_bids), default=summary_ask) if no_bids else summary_ask
+    # Best bid/ask from orderbook — prices are already in dollars (e.g. "0.47")
+    if yes_bids:
+        ob_yes_bid = max(float(b[0]) for b in yes_bids)
+    else:
+        ob_yes_bid = summary_bid
 
-    # Use orderbook prices if available, otherwise summary
+    if no_bids:
+        best_no_bid = max(float(b[0]) for b in no_bids)
+        ob_yes_ask = round(1.0 - best_no_bid, 4)  # NO bid of 0.53 = YES ask of 0.47
+    else:
+        ob_yes_ask = summary_ask
+
     bid = ob_yes_bid if ob_yes_bid > 0 else summary_bid
     ask = ob_yes_ask if ob_yes_ask > 0 else summary_ask
 

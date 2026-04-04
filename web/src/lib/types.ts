@@ -1,0 +1,80 @@
+export interface Portfolio {
+  bankroll: number;
+  total_pnl: number;
+  total_trades: number;
+  wins: number;
+  losses: number;
+  open_positions: Trade[];
+  total_news: number;
+  total_snapshots: number;
+  total_cycles: number;
+}
+
+export interface Trade {
+  id: number;
+  timestamp: string;
+  ticker: string;
+  title: string;
+  category: string;
+  side: string;
+  action: string;
+  contracts: number;
+  entry_price: number;
+  cost: number;
+  fee: number;
+  estimated_prob: number;
+  edge: number;
+  confidence: string;
+  reasoning: string;
+  news_trigger: string;
+  sources: string;
+  settled: number;
+  outcome: string;
+  pnl: number;
+  exit_price: number | null;
+  exit_reasoning: string;
+}
+
+export interface NewsArticle {
+  id: number;
+  timestamp: string;
+  source: string;
+  keyword: string;
+  title: string;
+  url: string;
+  snippet: string;
+}
+
+export interface Market {
+  id: number;
+  timestamp: string;
+  ticker: string;
+  title: string;
+  category: string;
+  yes_bid: number;
+  yes_ask: number;
+  mid: number;
+  volume: number;
+  open_interest: number;
+  close_time: string;
+}
+
+export interface AgentCycle {
+  id: number;
+  timestamp: string;
+  session_id: string;
+  duration_s: number;
+  status: string;
+  markets_scanned: number;
+  news_scraped: number;
+  trades_made: number;
+  output_summary: string;
+}
+
+export interface StreamLine {
+  type: string;
+  text?: string;
+  tool?: string;
+  input?: string;
+  result?: string;
+}
