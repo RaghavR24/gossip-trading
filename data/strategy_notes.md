@@ -84,3 +84,42 @@ Risk: Trump unpredictability, long time horizon (3 years). Capital locked for po
 - No pharma or CPI/inflation markets found on Kalshi to trade this angle
 
 **No new trades this cycle.** Market scan yielded 26 markets but none with >10pp edge. The cabinet departure cluster remains the most interesting theme but prices have adjusted since Bondi's firing. Waiting for Bondi settlement and monitoring DeRemer/Lutnick news.
+
+### 2026-04-04 — Fourth Cycle
+
+**Portfolio status:** $12.79 cash, $17.21 deployed across 5 positions (max slots filled).
+
+**New trades — Gas price markets (KXAAAGASW-26APR06):**
+1. **Gas >$4.130 YES @ 42c × 2** — AAA national avg $4.104 on Apr 4, strong upward trend (+$0.128/week, +$0.013/day). Expected price Apr 6: $4.128-4.140. Market crashed from 66% to 42% after one slower day. My estimate 50-55%. Edge: ~10pp.
+2. **Gas >$4.140 YES @ 18c × 4** — Higher-risk complement. At weekly drift rate, expected price right at boundary ($4.140). Market at 17%, my estimate 25%. Edge: 7pp (borderline but good ROI). If gas continues at weekly pace, both hit.
+
+**Key thesis:** Gas prices surging due to tariffs — up $0.906 in one month, exceeding $4/gal nationally for first time in 4 years. The daily rate appears to be decelerating (from $0.030/day monthly avg to $0.018/day weekly avg to $0.013 yesterday). The market is pricing in deceleration; I think the weekly rate ($0.018/day) is more representative than a single slow day.
+
+**Research findings — markets passed on:**
+- **CPI March (KXCPIYOY-26MAR-T3.3):** Closes Apr 10. Market at 51% for >3.3%. Feb CPI was 2.4%; market pricing massive tariff shock to ~3.3%. Very liquid (76K OI, 1c spread). Don't have enough tariff-to-CPI modeling to have conviction against a liquid market. PASS.
+- **Dallas temp <72°F (KXHIGHTDAL-26APR04-T72):** Market at 1% (crashed from 29%). NWS forecast said 71°F but market has real-time obs. Can't compete with locals tracking actual temperature. PASS.
+- **NYC temp:** Similar to Dallas — market already priced. PASS.
+- **DHS CBP Commissioner (KXCOMMISHCBP):** 0 open markets.
+
+**Process lessons:**
+- The `search` function only checks the first 200 events — most short-term markets (weather, CPI, gas) are in SERIES not events. To find them: query `/series` endpoint, filter by keyword, then query `/markets` per series.
+- Gas price markets use AAA daily price on the specific date. Settlement source: gasprices.aaa.com.
+- CPI markets reference BLS one-decimal-place value for 12-month YoY.
+- Weather markets reference NWS Climatological Report (Daily), NOT AccuWeather or Google Weather.
+- When a weather market crashes intraday, the market likely has real-time obs. Don't fade it unless you also have current obs.
+- Gas price trends: use weekly average daily change, not just yesterday's change, for drift estimation.
+
+### 2026-04-04 — Fifth Cycle
+
+**Portfolio status:** $12.79 cash, $17.21 deployed across 5 positions (max slots). Unrealized P&L: -$0.59.
+
+**Position review — all HOLD:**
+- **Bondi Apr 5 YES @ 82c × 10:** Closes tonight. Fired Apr 2, confirmed by all outlets. Todd Blanche installed as acting AG. Market still at 81c — puzzling discount. Possible risk: Bondi said she'd "transition over the next month," so Kalshi might interpret she hasn't formally "left" yet. But rules say "removal" counts. Expecting YES settlement → +$1.80.
+- **DeRemer May 1 YES @ 44c × 5:** Market at 43c. No firing yet. Trump "mulling" changes per NBC Apr 3. She's "vulnerable" per WaPo. IG probe ongoing. Thesis intact but no new hard evidence. HOLD.
+- **Greenland NO @ 65c × 8:** Market at 64c. No developments. HOLD.
+- **Gas $4.130 YES @ 42c × 2:** DOWN to 30c (-28.6%). AAA daily prices show deceleration: Apr 1 $4.06, Apr 2 $4.081, Apr 3 $4.091, Apr 4 $4.104. Daily increases: +$0.021, +$0.010, +$0.013. Need +$0.026 in 2 days — tight. Revised estimate: 35-40% (was 50-55%). Edge gone. But selling recovers only $0.60 vs $0.84 cost. Better to let expire and take the binary outcome.
+- **Gas $4.140 YES @ 18c × 4:** DOWN to 15c (-16.7%). Need +$0.036 in 2 days. Revised estimate: 15-20%. No edge. Same logic — let expire.
+
+**Key lesson: Gas price deceleration was real.** The market priced it correctly — the one-day slowdown I dismissed as noise was actually the start of a trend shift. Daily increases went from $0.021 → $0.010 → $0.013. The weekly average ($0.018/day) overestimated the forward rate. Lesson: when a trend decelerates, the market's reaction is usually right. Don't fade momentum shifts in commodity markets on a 2-day horizon.
+
+**No new trades.** At max capacity (5/5 positions) with no compelling reason to exit and re-enter. Waiting for Bondi settlement to free a slot and capital.

@@ -1,149 +1,222 @@
 # Gossip Trading
 
-Autonomous prediction market trading agent for [Kalshi](https://kalshi.com). Built for the Entrepreneur First Hackathon.
+**An autonomous AI agent that trades prediction markets by reading the news before the crowd.**
 
-The agent scrapes news, scans Kalshi markets, estimates probabilities using LLM reasoning, and paper trades when it finds mispriced markets. The "gossip" is the news — the agent listens to the world's gossip and trades before the crowd catches up.
+Built for the [Entrepreneur First](https://www.joinef.com/) AI Agent Hackathon. Gossip Trading is a fully autonomous system where Claude reasons about real-world events, estimates probabilities, and executes trades on [Kalshi](https://kalshi.com) — with real money.
 
-## Architecture
+The "gossip" is the signal. News breaks, rumors spread, data drops — and markets lag. This agent closes the gap.
 
-**Claude Code IS the agent.** No API calls to Anthropic. We spawn the `claude` CLI as a subprocess (Paperclip pattern), which means zero LLM cost on a Claude Max subscription. The Python modules are CLI tools that Claude Code invokes.
+---
+
+## How It Works
+
+A human submits a thesis, or the agent self-discovers opportunities. It scrapes news, reads primary sources, estimates probabilities, and trades when it finds edge. No rules engine. No hardcoded strategies. Pure reasoning.
 
 ```
-┌─────────────────────────────────────────────────┐
-│           CLAUDE CODE (the brain)                │
-│  • Reads SOUL.md for personality/strategy        │
-│  • Scans markets (gossip/kalshi.py)              │
-│  • Scrapes news (gossip/news.py + web search)    │
-│  • Reasons about probability (native LLM)        │
-│  • Trades (gossip/trader.py)                     │
-│  • Writes strategy_notes.md for memory           │
-└─────────────────────────────────────────────────┘
-         │              │               │
-    ┌────▼────┐   ┌─────▼─────┐   ┌────▼────┐
-    │ Kalshi  │   │   News    │   │ Trader  │
-    │  API    │   │  (Apify)  │   │ (Paper) │
-    └─────────┘   └───────────┘   └─────────┘
-         │              │               │
-         └──────────────┼───────────────┘
-                   ┌────▼────┐
-                   │ SQLite  │  ← data/gossip.db
-                   └─────────┘
-                        │
-                   ┌────▼────┐
-                   │ Next.js │  ← web/ (dashboard)
-                   └─────────┘
+"Bondi was fired April 2. Market still at 82¢ YES for 'leaves before Apr 5.'
+ That's near-arbitrage. Buying 10 contracts." — Gossip Trading, Cycle 1
 ```
+
+The agent found this on its first run. Bondi's firing was confirmed by CNN, Fox, NPR, NBC, WaPo — but the prediction market hadn't caught up. The agent bought YES at 82¢ for a near-certain $1.00 payout.
+
+---
+
+## Architecture: The Paperclip Pattern
+
+The core insight: **Claude Code IS the agent.** We don't call the Anthropic API. We spawn the `claude` CLI as a subprocess, which gives us a full reasoning agent with built-in tool use — web search, file I/O, bash execution — at zero marginal LLM cost on a Max subscription.
+
+```
+                           ┌──────────────────────────────────┐
+                           │         ORCHESTRATOR             │
+                           │           main.py                │
+                           │                                  │
+                           │  Spawns Claude Code subprocess   │
+                           │  Pipes prompt → streams output   │
+                           │  Manages cycle lifecycle         │
+                           └────────────┬─────────────────────┘
+                                        │
+                                   stdin/stdout
+                                  (stream-json)
+                                        │
+┌───────────────────────────────────────▼───────────────────────────────────────┐
+│                                                                              │
+│                        CLAUDE CODE  (the reasoning engine)                   │
+│                                                                              │
+│   Reads SOUL.md for identity, risk rules, and strategy principles            │
+│   Reads strategy_notes.md for accumulated experience across sessions         │
+│   Decides what to research, what to trade, when to exit                      │
+│                                                                              │
+│   ┌─────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────┐   │
+│   │WebSearch│  │ WebFetch │  │   Bash   │  │  Read/   │  │    Write     │   │
+│   │(native) │  │ (native) │  │ (native) │  │  Glob    │  │   (native)   │   │
+│   └────┬────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘  └──────┬───────┘   │
+│        │            │             │              │               │           │
+│        │    Searches Google,      │     Reads    │      Writes   │           │
+│        │    reads articles,       │    SOUL.md,  │   strategy    │           │
+│        │    follows links         │    notes,    │    notes,     │           │
+│        │                          │    data      │   rationale   │           │
+│        │                          │              │   responses   │           │
+│        │            ┌─────────────▼──────────────┤               │           │
+│        │            │     Python CLI Tools        │               │           │
+│        │            │  (invoked via Bash tool)    │               │           │
+│        │            │                             │               │           │
+│        │            │  gossip/kalshi.py            │               │           │
+│        │            │    → scan, search, market    │               │           │
+│        │            │    → orderbook, order        │               │           │
+│        │            │    → positions, balance      │               │           │
+│        │            │                             │               │           │
+│        │            │  gossip/trader.py            │               │           │
+│        │            │    → trade, exit, settle     │               │           │
+│        │            │    → portfolio, prices       │               │           │
+│        │            │    → Kelly sizing, risk      │               │           │
+│        │            │                             │               │           │
+│        │            │  gossip/news.py              │               │           │
+│        │            │    → Google News, Twitter    │               │           │
+│        │            │    → article extraction      │               │           │
+│        │            └──────────────┬──────────────┘               │           │
+│        │                           │                              │           │
+└────────┼───────────────────────────┼──────────────────────────────┼───────────┘
+         │                           │                              │
+         │              ┌────────────▼────────────┐                 │
+         │              │       DATA LAYER        │                 │
+         │              │                         │                 │
+         │              │  SQLite (WAL mode)      │                 │
+         │              │  trades.json            │                 │
+         │              │  strategy_notes.md      │◄────────────────┘
+         │              │  user_rationales.json   │
+         │              └────────────┬────────────┘
+         │                           │
+         │              ┌────────────▼────────────┐
+         │              │    NEXT.JS DASHBOARD    │
+         │              │                         │
+         │              │  Live agent stream      │
+         │              │  Portfolio + P&L        │
+         │              │  Position management    │
+         │              │  Market scanner         │
+         │              │  News feed (RSS)        │
+         │              │  Thesis submission      │
+         │              └─────────────────────────┘
+```
+
+### Why This Architecture Is Different
+
+| Traditional AI Trading Bot | Gossip Trading |
+|---|---|
+| API calls per inference ($$$) | Claude Code subprocess (zero marginal cost) |
+| Hardcoded strategy rules | LLM reasons about each market independently |
+| Fixed data sources | Agent decides what to search, follows links |
+| Stateless between runs | strategy_notes.md = persistent memory |
+| No self-improvement | Agent writes lessons learned, reads them next cycle |
+| Rule-based entry/exit | Bayesian reasoning with probabilistic edge estimation |
+
+### The Agentic Loop
+
+Each cycle, the agent:
+
+1. **Reads its soul** — `SOUL.md` defines identity, risk discipline, and thinking framework
+2. **Recalls past experience** — `strategy_notes.md` contains lessons from every previous cycle
+3. **Auto-settles resolved markets** — checks Kalshi for markets that have resolved, returns capital
+4. **Reviews open positions** — fetches live prices, calculates unrealized P&L, re-evaluates theses
+5. **Discovers opportunities** — scans Kalshi events, searches for specific topics it knows have edge
+6. **Researches deeply** — web search, news scraping, primary source analysis
+7. **Estimates probability** — Bayesian reasoning: base rate → evidence → posterior
+8. **Sizes and executes** — Half-Kelly position sizing with hard risk limits
+9. **Writes memory** — records what it learned for the next cycle
+
+The agent is not following a script. It decides what to research, which markets to skip, when to exit positions, and what's worth remembering. The Python tools are capabilities, not instructions.
+
+### Session Architecture: Fresh Context, Persistent Memory
+
+Every cycle spawns a fresh Claude Code session. No conversation history bloat. But state persists through three mechanisms:
+
+- **SQLite** — trades, portfolio, market snapshots, news, agent logs
+- **strategy_notes.md** — agent-written free-form memory (lessons, observations, market regimes)
+- **SOUL.md** — immutable identity and risk rules the agent reads every session
+
+This gives us the best of both worlds: clean reasoning context + accumulated trading intelligence.
+
+---
+
+## The SOUL
+
+Every agent session reads [`SOUL.md`](SOUL.md) first. It defines:
+
+- **Identity** — "You think like a quant at a prop trading firm. You don't guess."
+- **Edge theory** — why the agent beats the crowd (speed, primary sources, math, non-obvious connections)
+- **Thinking framework** — base rates first, Bayesian updating, counterfactual reasoning
+- **Risk discipline** — hard limits the agent cannot override
+- **Anti-patterns** — what the agent explicitly does NOT do (trade on vibes, chase FOMO, hold losers)
+
+The SOUL ensures consistent behavior across sessions without carrying conversation context.
+
+---
+
+## Risk Engine
+
+The agent operates within hard guardrails it cannot override:
+
+| Rule | Value | Why |
+|------|-------|-----|
+| Max position size | 30% of bankroll | No single bet can blow up the account |
+| Max concurrent positions | 5 | Diversification, capital allocation |
+| Minimum edge to enter | 10 percentage points | Only trade clear mispricings |
+| Position sizing | Half-Kelly | Kelly criterion with 50% haircut for estimation error |
+| Exit trigger | Thesis invalidated | Don't hold losers out of stubbornness |
+| Profit-taking | Edge < 5pp | Lock in gains when the market catches up |
+
+---
+
+## Dashboard
+
+Real-time Next.js dashboard with:
+
+- **Live agent stream** — watch the agent think, search, and trade in real-time with rendered markdown
+- **Portfolio metrics** — bankroll, realized P&L, unrealized P&L, win rate, trade count
+- **Position cards** — expandable reasoning, live mark-to-market prices, Kalshi links
+- **Market scanner** — sortable table of active Kalshi markets
+- **News feed** — live Google News RSS with source favicons
+- **Thesis input** — submit a trading thesis for the agent to research
+- **Agent control** — run cycles, start loops, configure interval
+
+---
 
 ## Quick Start
 
 ```bash
-# 1. Install Python deps
+# Install
 pip install -r requirements.txt
+cd web && npm install && cd ..
 
-# 2. Set up env
+# Configure
 cp .env.example .env
-# Fill in: KALSHI_API_KEY_ID, KALSHI_PRIVATE_KEY_PATH, APIFY_API_TOKEN
+# Set: KALSHI_API_KEY_ID, KALSHI_PRIVATE_KEY_PATH, APIFY_API_TOKEN
 
-# 3. Run one agent cycle
+# Run one cycle
 python3 main.py
 
-# 4. Run continuous loop (15 min default)
-python3 main.py --loop
+# Run continuous loop
+python3 main.py --loop --interval 900
 
-# 5. Submit a trading thesis
-python3 main.py --rationale "I think tariffs on China will escalate"
+# Submit a thesis
+python3 main.py --rationale "Tariffs on China will escalate next week"
 
-# 6. Start the dashboard
-cd web && npm install && npm run dev
-# Open http://localhost:3000
+# Dashboard
+cd web && npm run dev
+# → http://localhost:3000
 ```
 
-## Project Structure
+## Stack
 
-```
-gossip-trading/
-├── SOUL.md              ← Agent personality, strategy, risk rules
-├── SPEC.md              ← Full technical spec
-├── main.py              ← Agent orchestrator (spawns Claude Code subprocess)
-├── requirements.txt
-├── .env                 ← API keys (gitignored)
-├── gossip/
-│   ├── kalshi.py        ← Kalshi API client (scan, search, market, orderbook, auth)
-│   ├── news.py          ← Apify news scraping (Google, Twitter, web, articles)
-│   ├── trader.py        ← Paper/live trading, Kelly sizing, portfolio management
-│   ├── db.py            ← SQLite persistence (trades, news, snapshots, agent logs)
-│   └── dashboard.py     ← Streamlit dashboard (legacy, replaced by web/)
-├── web/                 ← Next.js + Tailwind TypeScript dashboard
-│   ├── src/app/
-│   │   ├── page.tsx     ← Main dashboard (positions, live stream, news, agent log)
-│   │   └── api/         ← REST endpoints reading from SQLite
-│   └── src/lib/db.ts    ← SQLite connection for Next.js
-├── data/
-│   ├── gossip.db        ← SQLite database (source of truth)
-│   ├── trades.json      ← Trade log (secondary, used by agent)
-│   ├── strategy_notes.md ← Agent-maintained memory across sessions
-│   └── user_rationales.json ← User-submitted theses queue
-└── references/          ← (gitignored) cloned repos for reference
-```
+| Layer | Technology |
+|-------|-----------|
+| Reasoning engine | Claude Code CLI (Paperclip pattern) |
+| Market data | Kalshi REST API (RSA-PSS authenticated) |
+| News ingestion | Google News RSS, Apify scrapers, native web search |
+| Trading engine | Python — Kelly sizing, orderbook pricing, risk checks |
+| Persistence | SQLite (WAL mode) + JSON + Markdown |
+| Dashboard | Next.js 16, React 19, Tailwind CSS, TypeScript |
+| Agent memory | SOUL.md (identity) + strategy_notes.md (experience) |
 
-## How It Works
+---
 
-### Agent Loop (`main.py`)
-
-1. Spawns `claude --print --dangerously-skip-permissions` as a subprocess
-2. Pipes CYCLE_PROMPT: "Read SOUL.md, check portfolio, scan markets, research, trade"
-3. Claude Code runs tools (Bash, WebSearch, WebFetch, Read, Write)
-4. Agent uses Python CLI tools for market data and trading
-5. Output streams to `data/agent_live.jsonl` for the dashboard
-6. Cycle ends, results logged to SQLite
-
-### Key Design Decisions
-
-- **Fresh sessions each cycle** — no context bloat. State lives in files (SQLite + JSON + strategy_notes.md). Each cycle starts clean and reads its state.
-- **SOUL.md** — persistent personality document every agent session reads. Ensures consistent strategy and risk discipline across sessions.
-- **strategy_notes.md** — agent-maintained memory. Writes lessons learned, reads them next cycle.
-- **User rationales** — users submit theses ("I think X"), agent researches and trades accordingly.
-- **Orderbook pricing** — uses real orderbook (yes_dollars/no_dollars) not stale market summary.
-- **Always prod API** — demo API has fake/stale data. We always read from prod.
-
-### Dashboard (`web/`)
-
-Next.js app that reads from SQLite. Features:
-- Real-time portfolio metrics (bankroll, P&L, trades, win rate)
-- Live agent stream (text, tool calls, tool results as they happen)
-- Thesis input — submit a thesis for the agent to research
-- Custom command input — send any instruction to the agent
-- Loop interval control (1m/5m/10m/15m/30m)
-- Open positions, trade history, news feed, agent log tabs
-
-## Tech Stack
-
-- **Python 3.11+** — agent tools, Kalshi API, Apify, trading logic
-- **Claude Code CLI** — LLM brain (zero cost on Max subscription)
-- **Apify** — news scraping (Google News, Twitter, web search, article extraction)
-- **Kalshi REST API** — prediction market data and trading
-- **SQLite** — persistence (WAL mode, zero config)
-- **Next.js + Tailwind** — real-time dashboard
-- **better-sqlite3** — SQLite from Node.js
-
-## Configuration
-
-### Environment Variables (.env)
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `KALSHI_API_KEY_ID` | Yes | Kalshi API key ID |
-| `KALSHI_PRIVATE_KEY_PATH` | Yes | Path to RSA private key PEM |
-| `APIFY_API_TOKEN` | Yes | Apify API token for news scraping |
-| `BANKROLL` | No | Starting paper bankroll (default $30) |
-| `MIN_EDGE` | No | Minimum edge to trade (default 10pp) |
-| `MAX_POSITION_PCT` | No | Max bankroll per position (default 30%) |
-| `CYCLE_INTERVAL` | No | Loop interval in seconds (default 900) |
-
-### Risk Guardrails
-
-These are circuit breakers the agent cannot override:
-- Max 30% of bankroll on any single position
-- Max 5 concurrent positions
-- Minimum 10pp edge to enter
-- Half-Kelly sizing (never full Kelly)
+*Built by Raghav & Ani at the EF AI Agent Hackathon.*

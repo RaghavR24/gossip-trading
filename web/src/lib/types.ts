@@ -72,6 +72,39 @@ export interface AgentCycle {
   output_summary: string;
 }
 
+export interface PositionPrice {
+  ticker: string;
+  title: string;
+  side: string;
+  contracts: number;
+  entry_price: number;
+  mark_price: number;
+  mid: number;
+  cost: number;
+  current_value: number;
+  unrealized_pnl: number;
+  pnl_pct: number;
+  status: string;
+  result: string;
+}
+
+export interface SocialPost {
+  id: string;
+  text: string;
+  author: string;
+  authorName: string;
+  authorImage?: string;
+  likes: number;
+  reposts: number;
+  replies?: number;
+  url: string;
+  timestamp: string;
+  platform: "twitter" | "truthsocial" | "reddit" | "tiktok";
+  images?: string[];
+  videoCover?: string;
+  videoDuration?: number;
+}
+
 export interface StreamLine {
   type: string;
   text?: string;

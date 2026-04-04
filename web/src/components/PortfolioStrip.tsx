@@ -12,9 +12,10 @@ import type { Portfolio } from "@/lib/types";
 
 interface PortfolioStripProps {
   portfolio: Portfolio | null;
+  unrealizedPnl?: number;
 }
 
-export function PortfolioStrip({ portfolio }: PortfolioStripProps) {
+export function PortfolioStrip({ portfolio, unrealizedPnl = 0 }: PortfolioStripProps) {
   if (!portfolio) {
     return (
       <div className="h-[72px] flex items-center px-6 border-b border-border bg-card/30 shrink-0">
@@ -24,10 +25,10 @@ export function PortfolioStrip({ portfolio }: PortfolioStripProps) {
   }
 
   const pnlPositive = portfolio.total_pnl >= 0;
-  const winRate =
-    portfolio.total_trades > 0
-      ? ((portfolio.wins / portfolio.total_trades) * 100).toFixed(0)
-      : "0";
+  const settled = portfolio.wins + portfolio.losses;
+  const winRate = settled > 0
+    ? ((portfolio.wins / settled) * 100).toFixed(0)
+    : null;
 
   return (
     <div className="h-[72px] flex items-center gap-6 px-6 border-b border-border bg-card/30 shrink-0 overflow-hidden">
@@ -60,6 +61,20 @@ export function PortfolioStrip({ portfolio }: PortfolioStripProps) {
         </div>
       </div>
 
+      {unrealizedPnl !== 0 && (
+        <div
+          className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+            unrealizedPnl >= 0
+              ? "bg-primary/5 text-primary/70"
+              : "bg-destructive/5 text-destructive/70"
+          }`}
+        >
+          <span className="text-[9px] text-muted-foreground/40 mr-0.5">UNRLZD</span>
+          {unrealizedPnl >= 0 ? "+" : "-"}
+          ${Math.abs(unrealizedPnl).toFixed(2)}
+        </div>
+      )}
+
       <div className="h-8 w-px bg-border" />
 
       <div className="flex items-center gap-5">
@@ -71,9 +86,11 @@ export function PortfolioStrip({ portfolio }: PortfolioStripProps) {
         <Metric
           icon={<Trophy className="h-3.5 w-3.5" />}
           label="Win Rate"
-          value={`${winRate}%`}
+          value={winRate !== null ? `${winRate}%` : "—"}
           valueColor={
-            Number(winRate) >= 50 ? "text-primary" : "text-destructive"
+            winRate === null
+              ? "text-muted-foreground"
+              : Number(winRate) >= 50 ? "text-primary" : "text-destructive"
           }
         />
         <Metric

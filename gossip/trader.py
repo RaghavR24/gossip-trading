@@ -296,6 +296,24 @@ async def execute_trade(
         sources=sources or [],
     )
 
+    # Live execution if enabled
+    live_trading = os.getenv("LIVE_TRADING", "false").lower() == "true"
+    order_result = None
+    if live_trading:
+        from gossip.kalshi import place_order
+        price_cents = int(entry_price * 100)
+        order_result = await place_order(
+            ticker=ticker,
+            action="buy",
+            side=side,
+            count=contracts,
+            price_cents=price_cents,
+            order_type="limit",
+        )
+        if "error" in order_result:
+            return {"error": f"Live order failed: {order_result}", "mode": "live"}
+        log(f"LIVE ORDER placed: {order_result}")
+
     portfolio.trades.append(trade)
     portfolio.bankroll = round(portfolio.bankroll - cost - fee, 2)
     portfolio.total_trades += 1
@@ -316,6 +334,8 @@ async def execute_trade(
 
     return {
         "status": "executed",
+        "mode": "live" if live_trading else "paper",
+        "order": order_result,
         "ticker": ticker,
         "side": side,
         "contracts": contracts,
@@ -412,6 +432,85 @@ def settle_market(ticker: str, outcome_yes: bool) -> dict:
     return {"error": f"No open trade on {ticker}"}
 
 
+async def check_settlements() -> list[dict]:
+    """Check if any open positions have resolved on Kalshi and auto-settle them."""
+    from gossip.kalshi import get_market_detail
+
+    portfolio = load_portfolio()
+    settled = []
+    for t in portfolio.trades:
+        if t.settled:
+            continue
+        detail = await get_market_detail(t.ticker)
+        market = detail.get("market", {})
+        result = market.get("result", "")
+        status = market.get("status", "")
+        if result in ("yes", "no") or status == "settled":
+            outcome_yes = result == "yes"
+            won = (t.side == "yes" and outcome_yes) or (t.side == "no" and not outcome_yes)
+            t.settled = True
+            if won:
+                t.outcome = "win"
+                t.pnl = round((1.0 - t.entry_price) * t.contracts, 2)
+                portfolio.wins += 1
+            else:
+                t.outcome = "loss"
+                t.pnl = round(-t.entry_price * t.contracts, 2)
+                portfolio.losses += 1
+            portfolio.total_pnl = round(portfolio.total_pnl + t.pnl, 2)
+            portfolio.bankroll = round(portfolio.bankroll + t.entry_price * t.contracts + t.pnl, 2)
+            settled.append({
+                "ticker": t.ticker,
+                "result": result,
+                "outcome": t.outcome,
+                "pnl": t.pnl,
+            })
+            log(f"AUTO-SETTLED {t.ticker}: {t.outcome} (pnl: {t.pnl:+.2f})")
+
+    if settled:
+        save_portfolio(portfolio)
+    return settled
+
+
+async def get_position_prices() -> list[dict]:
+    """Fetch current prices for all open positions and calculate unrealized P&L."""
+    from gossip.kalshi import get_market_detail
+
+    portfolio = load_portfolio()
+    positions = []
+    for t in portfolio.open_positions:
+        detail = await get_market_detail(t.ticker)
+        market = detail.get("market", {})
+        bid = float(market.get("yes_bid_dollars", "0") or "0")
+        ask = float(market.get("yes_ask_dollars", "0") or "0")
+        mid = (bid + ask) / 2 if bid > 0 or ask > 0 else 0
+
+        if t.side == "yes":
+            current_value = bid * t.contracts
+            mark_price = bid
+        else:
+            current_value = (1.0 - ask) * t.contracts
+            mark_price = 1.0 - ask
+
+        unrealized_pnl = round(current_value - t.cost, 2)
+        positions.append({
+            "ticker": t.ticker,
+            "title": t.title,
+            "side": t.side,
+            "contracts": t.contracts,
+            "entry_price": t.entry_price,
+            "mark_price": round(mark_price, 4),
+            "mid": round(mid, 4),
+            "cost": t.cost,
+            "current_value": round(current_value, 2),
+            "unrealized_pnl": unrealized_pnl,
+            "pnl_pct": round(unrealized_pnl / t.cost * 100, 1) if t.cost > 0 else 0,
+            "status": market.get("status", ""),
+            "result": market.get("result", ""),
+        })
+    return positions
+
+
 # --- CLI ---
 
 async def main():
@@ -444,6 +543,8 @@ async def main():
     size_p.add_argument("--side", choices=["yes", "no"], default="yes")
 
     sub.add_parser("history", help="Trade history")
+    sub.add_parser("check-settled", help="Auto-settle resolved markets")
+    sub.add_parser("prices", help="Current prices + unrealized P&L for open positions")
 
     args = parser.parse_args()
 
@@ -527,6 +628,15 @@ async def main():
         p = load_portfolio()
         trades = [asdict(t) for t in p.trades[-20:]]
         print(json.dumps(trades, indent=2))
+
+    elif args.command == "check-settled":
+        settled = await check_settlements()
+        print(json.dumps({"settled": settled, "count": len(settled)}, indent=2))
+
+    elif args.command == "prices":
+        positions = await get_position_prices()
+        total_unrealized = sum(p["unrealized_pnl"] for p in positions)
+        print(json.dumps({"positions": positions, "total_unrealized_pnl": round(total_unrealized, 2)}, indent=2))
 
     else:
         parser.print_help()

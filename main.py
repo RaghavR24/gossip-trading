@@ -38,33 +38,48 @@ Check data/user_rationales.json for any pending user theses to research.
 
 Then run a full trading cycle:
 
-1. Check your portfolio — run `PYTHONPATH=. python3 gossip/trader.py portfolio`
+1. AUTO-SETTLE resolved markets first:
+   `PYTHONPATH=. python3 gossip/trader.py check-settled`
+   This checks Kalshi for any markets that have resolved and auto-settles them, returning capital to bankroll.
 
-2. For each open position, research whether the thesis still holds.
-   Use web search to find latest news. Exit if thesis is dead.
+2. Check portfolio and live prices:
+   `PYTHONPATH=. python3 gossip/trader.py portfolio`
+   `PYTHONPATH=. python3 gossip/trader.py prices`
+   Review each open position's unrealized P&L and current market price vs your entry.
 
-3. Scan Kalshi markets — run `PYTHONPATH=. python3 gossip/kalshi.py quick --limit 40`
-   This is fast (~10s). For deeper scan: `PYTHONPATH=. python3 gossip/kalshi.py scan --limit 30`
+3. POSITION REVIEW — for each open position:
+   - If current price moved significantly toward your thesis (e.g. YES at 95c+ when you entered at 82c), consider selling now to lock profit vs waiting for settlement.
+   - If thesis has weakened or news contradicts it, EXIT: `PYTHONPATH=. python3 gossip/trader.py exit TICKER --reasoning "..."`
+   - If thesis still holds and edge remains, HOLD.
+   - Use web search to verify — don't just check prices, check if the underlying event happened.
 
-4. Pick the most promising markets and research them:
-   - Use web search to find relevant news and data
+4. MARKET DISCOVERY — use targeted searches, not just broad scans:
+   - `PYTHONPATH=. python3 gossip/kalshi.py quick --limit 60` for broad overview
+   - `PYTHONPATH=. python3 gossip/kalshi.py search "specific topic"` for targeted lookups
+   - Focus on categories where news creates edge: Politics, Economics, Macro events
+   - Search for current events you already know about from news/web search
+   - Skip sports, entertainment, and illiquid markets (volume < 500, spread > 15c)
+
+5. RESEARCH — pick 3-5 promising markets:
+   - Use web search to find relevant news and primary sources
    - Use `PYTHONPATH=. python3 gossip/news.py --keywords "..."` for broader news scraping
-   - Read primary sources — follow links, extract data
    - Estimate the true probability based on evidence
+   - Look for near-arbitrage: events that already happened but market hasn't caught up
 
-5. If you find edge > 10pp with clear reasoning, trade:
+6. TRADE if you find edge > 10pp with clear reasoning:
+   Before executing, answer in one line: "Evidence type: [hard/soft/speculation]. Weakest assumption: [X]."
+   If the evidence is speculation, PASS unless edge is overwhelming (>25pp).
+   If you can't name what would make you wrong, your thesis isn't specific enough — PASS.
    `PYTHONPATH=. python3 gossip/trader.py trade TICKER --side yes/no --estimate 0.XX --confidence high/medium --reasoning "..."`
 
-6. Update data/strategy_notes.md with what you learned this cycle.
+7. Update data/strategy_notes.md with what you learned this cycle.
 
 EXECUTION DISCIPLINE:
-- Be decisive. Research → conclude → act. Don't loop searching for markets endlessly.
-- If a scan is slow, move on and use web search or direct market lookups instead.
-- For each market you research: reach a YES/NO/PASS decision within 2-3 tool calls.
-- Aim to evaluate 3-5 markets per cycle and trade the best 1-2. Don't try to cover everything.
-- If you can't find edge after 5 minutes of research on a market, pass and move on.
-- Write your conclusion and reasoning even when you pass — future cycles benefit from it.
-- At the end of every cycle, update data/strategy_notes.md with what you learned.
+- Be decisive. Research → conclude → act. Don't loop endlessly.
+- For each market: reach a YES/NO/PASS decision within 2-3 tool calls.
+- Evaluate 3-5 markets per cycle, trade the best 1-2. Don't try to cover everything.
+- If you can't find edge after 5 minutes on a market, pass and move on.
+- Write your conclusion even when you pass — future cycles benefit from it.
 """
 
 

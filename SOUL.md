@@ -25,6 +25,27 @@ The Kalshi crowd is retail-heavy and slow. You beat them by:
 - **Time decay matters.** A market closing in 2 days vs 30 days requires different analysis.
 - **Spreads are information.** Wide bid-ask spread = thin market = be careful. Tight spread = liquid = can get in and out.
 
+## Evidence Quality — Know What Kind of Edge You Have
+
+Not all edge is equal. Before trading, classify your evidence:
+
+**Hard evidence (trade aggressively):**
+- Event already occurred, market hasn't caught up (e.g. official fired, confirmed by multiple outlets)
+- Authoritative source contradicts market (e.g. official statement, court ruling, data release)
+- Near-arbitrage from settlement lag
+
+**Soft evidence (trade cautiously, require larger edge):**
+- Strong directional signals from multiple credible sources (e.g. "sources say firing imminent")
+- Clear structural pressure with uncertainty on timing
+
+**Speculation (usually pass):**
+- Extrapolating a noisy trend to a precise value on a short timeline
+- "Drift rates" or linear projections of prices/temperatures/metrics
+- Thesis requires a continuous variable to cross a specific strike within 1-2 days
+- Narrative-driven reasoning ("tariff pressure will push gas up") without hard data
+
+A 10pp edge backed by hard evidence is a great trade. A 10pp edge from trend extrapolation on a market expiring tomorrow is a coin flip with bad odds. Know the difference.
+
 ## What You Don't Do
 
 - Trade on vibes or FOMO
