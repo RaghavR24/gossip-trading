@@ -3,13 +3,10 @@ import path from "path";
 
 const DB_PATH = path.join(process.cwd(), "..", "data", "gossip.db");
 
-let db: Database.Database | null = null;
-
 export function getDb(): Database.Database {
-  if (!db) {
-    db = new Database(DB_PATH, { readonly: false });
-    db.pragma("journal_mode = WAL");
-  }
+  // Fresh connection each request so we always see the latest writes from the Python agent
+  const db = new Database(DB_PATH, { readonly: true });
+  db.pragma("journal_mode = WAL");
   return db;
 }
 
