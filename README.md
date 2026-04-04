@@ -218,5 +218,3 @@ cd web && npm run dev
 | Agent memory | SOUL.md (identity) + strategy_notes.md (experience) |
 
 ---
-
-*Built by Raghav & Ani at the EF AI Agent Hackathon.*
