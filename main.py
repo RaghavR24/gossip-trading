@@ -1,14 +1,15 @@
 """
-Gossip Trading — autonomous agent loop.
+Gossip Trading — agent orchestrator.
 
-Spawns Claude Code as a subprocess to reason about markets + news and trade.
-All state lives in files (data/trades.json), not in conversation context.
+Spawns Claude Code as a subprocess. The agent reads SOUL.md for personality,
+uses tools directly (web search, Apify, Kalshi API), and persists state to SQLite.
 
 Usage:
-    python3 main.py                    # run one cycle
-    python3 main.py --loop             # continuous loop (default 15min interval)
+    python3 main.py                         # single research + trade cycle
+    python3 main.py --loop                  # continuous loop
     python3 main.py --loop --interval 300   # 5 min interval
-    python3 main.py --prompt "check positions"  # custom prompt
+    python3 main.py --rationale "I think tariffs will escalate next week"
+    python3 main.py --prompt "check my positions and update strategy notes"
 """
 
 from __future__ import annotations
@@ -26,116 +27,73 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
-DATA_DIR = Path(__file__).resolve().parent / "data"
+PROJECT_DIR = Path(__file__).resolve().parent
+DATA_DIR = PROJECT_DIR / "data"
 SESSION_FILE = DATA_DIR / "session_id.txt"
-CYCLE_LOG = DATA_DIR / "cycle_log.json"
 
-AGENT_PROMPT = """You are Gossip Trading, an autonomous prediction market agent. You research news and trade Kalshi prediction markets when you find mispriced opportunities.
+# The agent prompt: agentic, not scripted. Agent uses its own tools.
+CYCLE_PROMPT = """Read SOUL.md for your identity and strategy principles.
+Read data/strategy_notes.md for lessons from past sessions.
+Check data/user_rationales.json for any pending user theses to research.
 
-YOUR TOOLS (run as shell commands from the gossip-trading directory):
+Then run a full trading cycle:
 
-Market Data:
-  python3 gossip/kalshi.py scan                                    → list active markets (sorted by volume)
-  python3 gossip/kalshi.py scan --categories "Economics,Politics"   → filtered scan
-  python3 gossip/kalshi.py market TICKER                           → market details + orderbook
-  python3 gossip/kalshi.py orderbook TICKER                        → full orderbook
-  python3 gossip/kalshi.py search "bitcoin"                        → search events by keyword
+1. Check your portfolio — run `python3 gossip/trader.py portfolio`
 
-News Intelligence:
-  python3 gossip/news.py --keywords "bitcoin,tariff"               → Google News scrape
-  python3 gossip/news.py --source twitter --keywords "crypto"      → Twitter/X scrape
-  python3 gossip/news.py --trending                                → trending news scan
-  python3 gossip/news.py --urls "url1,url2"                        → extract article text
+2. For each open position, research whether the thesis still holds.
+   Use web search to find latest news. Exit if thesis is dead.
 
-Trading:
-  python3 gossip/trader.py portfolio                               → current positions + P&L
-  python3 gossip/trader.py trade TICKER --side yes --estimate 0.72 --confidence high --reasoning "..."
-  python3 gossip/trader.py trade TICKER --side no --contracts 3 --estimate 0.30 --confidence medium --reasoning "..."
-  python3 gossip/trader.py exit TICKER --reasoning "..."
-  python3 gossip/trader.py settle TICKER --outcome yes
-  python3 gossip/trader.py size TICKER --estimate 0.72             → dry-run sizing calc
-  python3 gossip/trader.py history                                 → recent trades
+3. Scan Kalshi markets — run `python3 gossip/kalshi.py scan --limit 30`
+   Look at what's available. What categories look interesting today?
 
-YOUR JOB EACH CYCLE:
+4. Pick the most promising markets and research them:
+   - Use web search to find relevant news and data
+   - Use `python3 gossip/news.py --keywords "..."` for broader news scraping
+   - Read primary sources — follow links, extract data
+   - Estimate the true probability based on evidence
 
-1. CHECK PORTFOLIO — Run `python3 gossip/trader.py portfolio` to see current state.
+5. If you find edge > 10pp with clear reasoning, trade:
+   `python3 gossip/trader.py trade TICKER --side yes/no --estimate 0.XX --confidence high/medium --reasoning "..."`
 
-2. CHECK POSITIONS — For each open position:
-   - Scrape latest news relevant to that market
-   - Has the thesis changed? If invalidated, exit the position.
-   - Has edge shrunk below 5pp? Consider taking profit.
+6. Update data/strategy_notes.md with what you learned this cycle.
 
-3. SCAN MARKETS — Run `python3 gossip/kalshi.py scan` to see high-volume markets.
-
-4. SCRAPE NEWS — Run `python3 gossip/news.py --keywords "..."` with keywords derived from
-   the most interesting markets. Focus on markets where news could create edge.
-
-5. ANALYZE — For each market where news seems relevant:
-   - Think carefully about the base rate and what the news actually implies
-   - Estimate the TRUE probability (not what the market says, what YOU think)
-   - Compare to market price
-   - Only trade if edge > 10 percentage points AND you can articulate WHY the market is wrong
-
-6. TRADE — Use `python3 gossip/trader.py trade ...` with:
-   - Your probability estimate (--estimate)
-   - Your confidence level (--confidence high/medium/low)
-   - Clear reasoning (--reasoning "...")
-   - Kelly sizing is automatic if you omit --contracts
-
-SELF-DISCOVERY:
-- You decide what markets are interesting. The scan shows everything — YOU pick what to research.
-- You decide what to search for. Pick keywords based on the markets you see, not hardcoded lists.
-- You can scrape ANY news source, follow links, dig into articles for primary data.
-- If you discover an opportunity type the system wasn't designed for, trade it anyway.
-- Explore different market categories — crypto, politics, economics, weather, companies, world events.
-- Look for non-obvious connections: a news event might affect a market in a different category.
-
-RULES:
-- Think like a quant. Be specific about probabilities. Don't round to convenient numbers.
-- Only trade when you have a clear, articulable edge. "This seems underpriced" is NOT enough.
-- Read primary sources when possible — actual articles, not just headlines.
-- Consider the time to expiry. Markets closing in 2 days vs 30 days need different analysis.
-- Don't trade on noise. If the news is ambiguous, pass.
-- Log everything. Every decision should have reasoning.
-- Risk guardrails: max 5 concurrent positions, max 30% bankroll per position. Within those bounds, size optimally.
+Be agentic. Don't just follow steps mechanically — think about what markets
+are interesting RIGHT NOW given current events, and dig deep on those.
 """
 
-def load_session_id() -> str | None:
-    if SESSION_FILE.exists():
-        sid = SESSION_FILE.read_text().strip()
-        return sid if sid else None
-    return None
 
-def save_session_id(sid: str) -> None:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    SESSION_FILE.write_text(sid)
+def build_rationale_prompt(rationale: str) -> str:
+    return f"""Read SOUL.md for your identity and strategy principles.
 
-def log_cycle(result: dict) -> None:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    entries = []
-    if CYCLE_LOG.exists():
-        try:
-            entries = json.loads(CYCLE_LOG.read_text())
-        except Exception:
-            pass
-    entries.append(result)
-    # keep last 100 cycles
-    CYCLE_LOG.write_text(json.dumps(entries[-100:], indent=2))
+A user has submitted this thesis for you to research and potentially trade on:
+
+USER THESIS: {rationale}
+
+Your job:
+1. Research this thesis thoroughly using web search and news scraping.
+2. Find evidence for AND against.
+3. Estimate the probability if there's a relevant Kalshi market.
+4. If you find a market with edge based on this thesis, trade it.
+5. If the thesis doesn't hold up, explain why and pass.
+6. Update data/user_rationales.json with your findings.
+7. Update data/strategy_notes.md if you learned something new.
+
+Check portfolio first: `python3 gossip/trader.py portfolio`
+Scan markets: `python3 gossip/kalshi.py scan` or `python3 gossip/kalshi.py search "relevant keywords"`
+"""
 
 
-def run_agent_cycle(session_id: str | None, prompt: str, timeout: int = 600) -> dict:
-    """Spawn Claude Code as a subprocess and capture output."""
+def run_agent(prompt: str, timeout: int = 600) -> dict:
+    """Spawn Claude Code as a subprocess. Fresh session each time."""
     cmd = [
         "claude",
         "--print", "-",
         "--output-format", "stream-json",
         "--verbose",
-        "--max-turns", "50",
+        "--max-turns", "80",
+        "--dangerously-skip-permissions",
     ]
-    if session_id:
-        cmd.extend(["--resume", session_id])
 
-    # Strip Claude Code nesting guards (Paperclip pattern)
     env = {k: v for k, v in os.environ.items() if k not in {
         "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT",
     }}
@@ -143,100 +101,120 @@ def run_agent_cycle(session_id: str | None, prompt: str, timeout: int = 600) -> 
     start = time.time()
     try:
         result = subprocess.run(
-            cmd,
-            input=prompt,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            env=env,
-            cwd=str(Path(__file__).resolve().parent),
+            cmd, input=prompt, capture_output=True, text=True,
+            timeout=timeout, env=env, cwd=str(PROJECT_DIR),
         )
     except subprocess.TimeoutExpired:
-        return {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "status": "timeout",
-            "duration_s": timeout,
-            "session_id": session_id,
-        }
+        return {"status": "timeout", "duration_s": timeout, "timestamp": _now()}
 
     duration = round(time.time() - start, 1)
-    new_session_id = session_id
+    session_id = None
     agent_output = ""
 
-    # Parse stream-json for session_id and output
     for line in result.stdout.strip().split("\n"):
         if not line.strip():
             continue
         try:
             msg = json.loads(line)
             if msg.get("type") == "system" and "session_id" in msg:
-                new_session_id = msg["session_id"]
+                session_id = msg["session_id"]
             if msg.get("type") == "result":
                 agent_output = msg.get("result", "")
             if msg.get("type") == "assistant" and msg.get("message"):
-                content = msg["message"].get("content", [])
-                for block in content:
+                for block in msg["message"].get("content", []):
                     if isinstance(block, dict) and block.get("type") == "text":
                         agent_output += block.get("text", "") + "\n"
         except json.JSONDecodeError:
             continue
 
     cycle_result = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": _now(),
         "status": "ok" if result.returncode == 0 else "error",
         "duration_s": duration,
-        "session_id": new_session_id,
-        "output_preview": agent_output[:500] if agent_output else result.stderr[:500],
+        "session_id": session_id,
+        "output": agent_output[:2000] if agent_output else result.stderr[:2000],
     }
 
-    if new_session_id and new_session_id != session_id:
-        save_session_id(new_session_id)
+    # Log to DB
+    try:
+        from gossip.db import GossipDB
+        db = GossipDB()
+        db.log_cycle(
+            session_id=session_id or "",
+            duration_s=duration,
+            status=cycle_result["status"],
+            output_summary=agent_output[:1000] if agent_output else "",
+        )
+    except Exception:
+        pass
 
     return cycle_result
 
 
+def submit_rationale(thesis: str) -> None:
+    """Add a user rationale to the queue."""
+    rationale_file = DATA_DIR / "user_rationales.json"
+    data = {"rationales": []}
+    if rationale_file.exists():
+        try:
+            data = json.loads(rationale_file.read_text())
+        except Exception:
+            pass
+
+    data["rationales"].append({
+        "id": len(data["rationales"]) + 1,
+        "timestamp": _now(),
+        "thesis": thesis,
+        "status": "pending",
+        "agent_response": None,
+    })
+    rationale_file.write_text(json.dumps(data, indent=2))
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Gossip Trading agent loop")
+    parser = argparse.ArgumentParser(description="Gossip Trading agent")
     parser.add_argument("--loop", action="store_true", help="Run continuously")
     parser.add_argument("--interval", type=int, default=None, help="Cycle interval in seconds")
-    parser.add_argument("--prompt", type=str, default=None, help="Custom prompt (overrides default)")
-    parser.add_argument("--fresh", action="store_true", help="Start fresh session (ignore saved session)")
-    parser.add_argument("--dry-run", action="store_true", help="Print prompt and exit")
-    parser.add_argument("--timeout", type=int, default=600, help="Agent timeout per cycle in seconds")
+    parser.add_argument("--prompt", type=str, default=None, help="Custom prompt")
+    parser.add_argument("--rationale", type=str, default=None, help="Submit a trading thesis")
+    parser.add_argument("--timeout", type=int, default=600, help="Agent timeout per cycle")
+    parser.add_argument("--dry-run", action="store_true")
 
     args = parser.parse_args()
-
     interval = args.interval or int(os.getenv("CYCLE_INTERVAL", "900"))
-    prompt = args.prompt or AGENT_PROMPT
+
+    if args.rationale:
+        submit_rationale(args.rationale)
+        prompt = build_rationale_prompt(args.rationale)
+    else:
+        prompt = args.prompt or CYCLE_PROMPT
 
     if args.dry_run:
         print(prompt)
         return
 
-    session_id = None if args.fresh else load_session_id()
-
     print(f"[Gossip Trading] Starting agent", file=sys.stderr)
-    print(f"  Session: {'resuming ' + session_id[:12] + '...' if session_id else 'new'}", file=sys.stderr)
     print(f"  Mode: {'loop (' + str(interval) + 's)' if args.loop else 'single cycle'}", file=sys.stderr)
-    print(f"  Demo: {os.getenv('KALSHI_USE_DEMO', 'false')}", file=sys.stderr)
 
     while True:
-        cycle_start = datetime.now(timezone.utc)
-        print(f"\n[{cycle_start.strftime('%H:%M:%S')}] Starting cycle...", file=sys.stderr)
+        ts = datetime.now(timezone.utc).strftime('%H:%M:%S')
+        print(f"\n[{ts}] Starting cycle...", file=sys.stderr)
 
-        result = run_agent_cycle(session_id, prompt, timeout=args.timeout)
-        session_id = result.get("session_id")
-        log_cycle(result)
+        result = run_agent(prompt, timeout=args.timeout)
 
-        print(f"[{datetime.now(timezone.utc).strftime('%H:%M:%S')}] Cycle done: {result['status']} ({result['duration_s']}s)", file=sys.stderr)
-        if result.get("output_preview"):
-            print(f"  Output: {result['output_preview'][:200]}", file=sys.stderr)
+        print(f"[{datetime.now(timezone.utc).strftime('%H:%M:%S')}] Done: {result['status']} ({result['duration_s']}s)", file=sys.stderr)
+        if result.get("output"):
+            print(result["output"][:500], file=sys.stderr)
 
         if not args.loop:
             print(json.dumps(result, indent=2))
             break
 
-        print(f"  Sleeping {interval}s until next cycle...", file=sys.stderr)
+        print(f"  Next cycle in {interval}s...", file=sys.stderr)
         time.sleep(interval)
 
 
