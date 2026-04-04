@@ -21,6 +21,9 @@ const SUBREDDITS = [
   "https://www.reddit.com/r/wallstreetbets/hot/",
   "https://www.reddit.com/r/politics/hot/",
   "https://www.reddit.com/r/news/hot/",
+  "https://www.reddit.com/r/worldnews/hot/",
+  "https://www.reddit.com/r/economics/hot/",
+  "https://www.reddit.com/r/stocks/hot/",
   "https://www.reddit.com/r/polymarket/hot/",
 ];
 
@@ -42,7 +45,7 @@ async function fetchRedditPosts(): Promise<RedditPost[]> {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         startUrls: SUBREDDITS.map((url) => ({ url })),
-        maxItems: 60,
+        maxItems: 150,
       }),
       signal: AbortSignal.timeout(70_000),
     }

@@ -56,7 +56,21 @@ function parseRawTweets(raw: Record<string, unknown>[]): Tweet[] {
     .filter((item) => item.text)
     .map((item) => {
       const userInfo = (item.user_info as Record<string, unknown>) || {};
-      const media = item.media as Array<Record<string, unknown>> | undefined;
+      const rawMedia = item.media;
+      let photos: string[] = [];
+      if (Array.isArray(rawMedia)) {
+        photos = rawMedia
+          .filter((m: Record<string, unknown>) => m.type === "photo")
+          .map((m: Record<string, unknown>) => (m.media_url_https as string) || "")
+          .filter(Boolean);
+      } else if (rawMedia && typeof rawMedia === "object") {
+        const photoArr = (rawMedia as Record<string, unknown>).photo;
+        if (Array.isArray(photoArr)) {
+          photos = photoArr
+            .map((m: Record<string, unknown>) => (m.media_url_https as string) || "")
+            .filter(Boolean);
+        }
+      }
 
       return {
         id: (item.tweet_id as string) || "",
@@ -73,10 +87,7 @@ function parseRawTweets(raw: Record<string, unknown>[]): Tweet[] {
         url: `https://x.com/${item.screen_name}/status/${item.tweet_id}`,
         timestamp: (item.created_at as string) || new Date().toISOString(),
         platform: "twitter" as const,
-        images: media
-          ?.filter((m) => m.type === "photo")
-          .map((m) => (m.media_url_https as string) || (m.url as string))
-          .filter(Boolean),
+        images: photos.length > 0 ? photos : undefined,
       };
     })
     .sort(
