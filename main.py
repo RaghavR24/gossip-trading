@@ -43,8 +43,8 @@ Then run a full trading cycle:
 2. For each open position, research whether the thesis still holds.
    Use web search to find latest news. Exit if thesis is dead.
 
-3. Scan Kalshi markets — run `PYTHONPATH=. python3 gossip/kalshi.py scan --limit 30`
-   Look at what's available. What categories look interesting today?
+3. Scan Kalshi markets — run `PYTHONPATH=. python3 gossip/kalshi.py quick --limit 40`
+   This is fast (~10s). For deeper scan: `PYTHONPATH=. python3 gossip/kalshi.py scan --limit 30`
 
 4. Pick the most promising markets and research them:
    - Use web search to find relevant news and data

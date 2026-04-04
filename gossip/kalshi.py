@@ -298,6 +298,36 @@ async def search_events(query: str) -> list[dict]:
             })
         return results
 
+async def quick_scan(categories: set[str] | None = None, max_days: int = 30, min_volume: float = 100) -> list[dict]:
+    """Fast scan using /events endpoint — single paginated call instead of per-series iteration."""
+    async with aiohttp.ClientSession() as session:
+        all_markets = []
+        cursor = ""
+        for page in range(5):  # max 5 pages
+            params = {"limit": 200, "with_nested_markets": "true", "status": "open"}
+            if cursor:
+                params["cursor"] = cursor
+            data = await api_get(session, "/events", params)
+            events = data.get("events", [])
+            cursor = data.get("cursor", "")
+
+            for e in events:
+                cat = e.get("category", "")
+                if categories and cat not in categories:
+                    continue
+                for m in e.get("markets", []):
+                    parsed = parse_market(m, cat)
+                    if parsed and parsed.days_to_close <= max_days and parsed.volume >= min_volume:
+                        all_markets.append(parsed)
+
+            if not cursor:
+                break
+
+        all_markets.sort(key=lambda m: m.volume, reverse=True)
+        log(f"Quick scan: {len(all_markets)} markets found")
+        return all_markets
+
+
 async def get_event_markets(event_ticker: str) -> list[dict]:
     async with aiohttp.ClientSession() as session:
         data = await api_get(session, "/markets", {
@@ -344,11 +374,17 @@ async def main():
     parser = argparse.ArgumentParser(description="Kalshi API client")
     sub = parser.add_subparsers(dest="command")
 
-    scan_p = sub.add_parser("scan", help="Scan active markets")
+    scan_p = sub.add_parser("scan", help="Scan active markets (slow, per-series)")
     scan_p.add_argument("--categories", type=str, default=None)
     scan_p.add_argument("--days", type=int, default=30)
     scan_p.add_argument("--min-oi", type=float, default=50)
     scan_p.add_argument("--limit", type=int, default=50)
+
+    quick_p = sub.add_parser("quick", help="Fast scan via events endpoint (~10s)")
+    quick_p.add_argument("--categories", type=str, default=None)
+    quick_p.add_argument("--days", type=int, default=30)
+    quick_p.add_argument("--min-volume", type=float, default=100)
+    quick_p.add_argument("--limit", type=int, default=50)
 
     market_p = sub.add_parser("market", help="Get market details")
     market_p.add_argument("ticker")
@@ -384,6 +420,23 @@ async def main():
         results = [asdict(m) for m in markets[:args.limit]]
 
         # persist snapshots to DB
+        if results:
+            try:
+                import sys as _sys
+                _sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+                from gossip.db import GossipDB
+                db = GossipDB()
+                db.insert_market_snapshots(results)
+            except Exception as e:
+                log(f"DB snapshot write failed: {e}")
+
+        print(json.dumps(results, indent=2))
+
+    elif args.command == "quick":
+        cats = set(args.categories.split(",")) if args.categories else None
+        markets = await quick_scan(categories=cats, max_days=args.days, min_volume=args.min_volume)
+        results = [asdict(m) for m in markets[:args.limit]]
+
         if results:
             try:
                 import sys as _sys
