@@ -221,7 +221,7 @@ async def scan_markets(
     categories: set[str] | None = None,
     max_days: int = 30,
     min_oi: float = 50,
-    max_series: int = 200,
+    max_series: int = 100,
 ) -> list[Market]:
     async with aiohttp.ClientSession() as session:
         data = await api_get(session, "/series", {"limit": 500})

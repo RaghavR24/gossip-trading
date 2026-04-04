@@ -37,7 +37,7 @@ export function TopBar({
   onLoopIntervalChange,
 }: TopBarProps) {
   return (
-    <header className="h-14 flex items-center gap-4 px-5 border-b border-border bg-card shrink-0">
+    <header className="h-14 flex items-center gap-4 px-5 border-b border-border bg-card shrink-0 overflow-hidden max-w-full">
       <div className="flex items-center gap-3 mr-2">
         <Activity className="h-5 w-5 text-primary" />
         <span className="font-semibold text-sm tracking-tight">

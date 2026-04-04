@@ -57,8 +57,14 @@ Then run a full trading cycle:
 
 6. Update data/strategy_notes.md with what you learned this cycle.
 
-Be agentic. Don't just follow steps mechanically — think about what markets
-are interesting RIGHT NOW given current events, and dig deep on those.
+EXECUTION DISCIPLINE:
+- Be decisive. Research → conclude → act. Don't loop searching for markets endlessly.
+- If a scan is slow, move on and use web search or direct market lookups instead.
+- For each market you research: reach a YES/NO/PASS decision within 2-3 tool calls.
+- Aim to evaluate 3-5 markets per cycle and trade the best 1-2. Don't try to cover everything.
+- If you can't find edge after 5 minutes of research on a market, pass and move on.
+- Write your conclusion and reasoning even when you pass — future cycles benefit from it.
+- At the end of every cycle, update data/strategy_notes.md with what you learned.
 """
 
 
@@ -225,7 +231,7 @@ def main():
     parser.add_argument("--interval", type=int, default=None, help="Cycle interval in seconds")
     parser.add_argument("--prompt", type=str, default=None, help="Custom prompt")
     parser.add_argument("--rationale", type=str, default=None, help="Submit a trading thesis")
-    parser.add_argument("--timeout", type=int, default=600, help="Agent timeout per cycle")
+    parser.add_argument("--timeout", type=int, default=1200, help="Agent timeout per cycle (default 20min)")
     parser.add_argument("--dry-run", action="store_true")
 
     args = parser.parse_args()

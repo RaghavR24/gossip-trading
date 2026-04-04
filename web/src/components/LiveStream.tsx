@@ -21,9 +21,13 @@ export function LiveStream({
   onSendCommand,
 }: LiveStreamProps) {
   const endRef = useRef<HTMLDivElement>(null);
+  const prevLinesCount = useRef(0);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (lines.length > 0 && lines.length !== prevLinesCount.current) {
+      endRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+    prevLinesCount.current = lines.length;
   }, [lines.length]);
 
   return (
