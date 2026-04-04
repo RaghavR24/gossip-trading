@@ -4,5 +4,6 @@ __pycache__/
 .venv/
 references/
 data/*.json
+data/*.db
 *.db
 .DS_Store

@@ -35,6 +35,10 @@ PORTFOLIO_FILE = DATA_DIR / "portfolio.json"
 def log(msg: str) -> None:
     print(msg, file=sys.stderr)
 
+def get_db():
+    from gossip.db import GossipDB
+    return GossipDB()
+
 
 # --- State management ---
 
@@ -262,6 +266,19 @@ async def execute_trade(
     portfolio.bankroll = round(portfolio.bankroll - cost - fee, 2)
     portfolio.total_trades += 1
     save_portfolio(portfolio)
+
+    try:
+        db = get_db()
+        db.insert_trade(
+            ticker=ticker, title=title, category=category, side=side,
+            contracts=contracts, entry_price=round(entry_price, 4),
+            cost=round(cost, 2), fee=round(fee, 4),
+            estimated_prob=estimated_prob, edge=round(edge, 4),
+            confidence=confidence, reasoning=reasoning,
+            news_trigger=news_trigger, sources=sources or [],
+        )
+    except Exception as e:
+        log(f"DB write failed (trade still recorded in JSON): {e}")
 
     return {
         "status": "executed",

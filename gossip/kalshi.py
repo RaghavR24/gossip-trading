@@ -376,7 +376,18 @@ async def main():
     if args.command == "scan":
         cats = set(args.categories.split(",")) if args.categories else None
         markets = await scan_markets(categories=cats, max_days=args.days, min_oi=args.min_oi)
-        print(json.dumps([asdict(m) for m in markets[:args.limit]], indent=2))
+        results = [asdict(m) for m in markets[:args.limit]]
+
+        # persist snapshots to DB
+        if results:
+            try:
+                from gossip.db import GossipDB
+                db = GossipDB()
+                db.insert_market_snapshots(results)
+            except Exception as e:
+                log(f"DB snapshot write failed: {e}")
+
+        print(json.dumps(results, indent=2))
 
     elif args.command == "market":
         result = await get_market_detail(args.ticker)

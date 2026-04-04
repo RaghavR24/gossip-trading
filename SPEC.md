@@ -268,10 +268,11 @@ Pre-seed the agent with a few positions before the demo so there's a portfolio t
 
 - Python 3.11+, asyncio
 - Claude Code CLI as the LLM brain (zero API cost on Max subscription)
-- Apify (news scraping) — free tier
-- Kalshi REST API (markets + trading)
-- Streamlit (dashboard)
-- JSON files for state (hackathon simplicity)
+- Apify (news scraping) — free tier, Google News + Twitter + web search + article extraction
+- Kalshi REST API (markets + trading) with RSA auth
+- SQLite (data/gossip.db) — trades, news, market snapshots, agent logs. Single file, zero config.
+- Streamlit (real-time dashboard)
+- JSON files as secondary persistence (trader.py dual-writes)
 
 ## File Map
 
@@ -284,13 +285,15 @@ gossip-trading/
 ├── .gitignore
 ├── gossip/
 │   ├── __init__.py
-│   ├── news.py          ← CLI tool: Apify news scraping
-│   ├── kalshi.py         ← CLI tool: Kalshi API client
-│   ├── trader.py         ← CLI tool: trade execution + sizing
-│   └── dashboard.py      ← Streamlit dashboard
+│   ├── db.py             ← SQLite database layer (trades, news, snapshots, logs)
+│   ├── news.py           ← CLI tool: Apify news scraping
+│   ├── kalshi.py          ← CLI tool: Kalshi API client
+│   ├── trader.py          ← CLI tool: trade execution + sizing
+│   └── dashboard.py       ← Streamlit real-time dashboard
 ├── data/
-│   ├── trades.json       ← trade log with reasoning
-│   └── portfolio.json    ← current positions + bankroll
+│   ├── gossip.db          ← SQLite database (source of truth for dashboard)
+│   ├── trades.json        ← trade log with reasoning (secondary)
+│   └── session_id.txt     ← Claude Code session persistence
 └── references/           ← (gitignored) cloned repos for reference
     ├── prediction-market-assistant/
     └── kalshi-trading-bot-cli/

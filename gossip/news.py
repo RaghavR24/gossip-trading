@@ -217,6 +217,15 @@ def main():
     if args.source in ("web", "all"):
         results.extend(scrape_web_search(keywords, args.limit))
 
+    # persist to DB
+    if results:
+        try:
+            from gossip.db import GossipDB
+            db = GossipDB()
+            db.insert_news(results)
+        except Exception as e:
+            log(f"DB write failed: {e}")
+
     print(json.dumps(results[:args.limit], indent=2))
 
 
