@@ -123,3 +123,36 @@ Risk: Trump unpredictability, long time horizon (3 years). Capital locked for po
 **Key lesson: Gas price deceleration was real.** The market priced it correctly — the one-day slowdown I dismissed as noise was actually the start of a trend shift. Daily increases went from $0.021 → $0.010 → $0.013. The weekly average ($0.018/day) overestimated the forward rate. Lesson: when a trend decelerates, the market's reaction is usually right. Don't fade momentum shifts in commodity markets on a 2-day horizon.
 
 **No new trades.** At max capacity (5/5 positions) with no compelling reason to exit and re-enter. Waiting for Bondi settlement to free a slot and capital.
+
+### 2026-04-04 — Sixth Cycle (LIVE TRADING)
+
+**Portfolio reset:** DB was cleared. Starting fresh with $15 bankroll, 0 positions. Previous paper trades lost ~$15 (gas price bets lost, other positions unclear).
+
+**Trade executed:**
+1. **KXBONDIOUT-APR09 YES @ 80c × 5** — LIVE order on Kalshi. Cost: $4.00 + $0.06 fees. Near-arbitrage: Bondi confirmed fired Apr 2 by every major outlet (CNN, NPR, WaPo, Fox, NBC, CBS). Todd Blanche serving as acting AG. Market at 80c = 20c discount on a resolved event. Expected profit: $0.94 if settled YES.
+
+**Bondi cluster mispricing:** Apr 5 at 82-84c, Apr 9 at 79-80c, Apr 16 at 81-82c, May 1 at 89-90c. The Apr 9 market is CHEAPER than Apr 5 despite having 4 more days — pure microstructure inefficiency. Chose Apr 9 for best value. All should resolve YES identically.
+
+**Markets passed on:**
+- **DeRemer May 1 (42-44c):** Revised estimate down to 48-53%. She's survived 3+ months of scandal (IG probe since Jan, aides quit, drinking/affair allegations). Trump says "avoid massive shake-up." Edge 4-9pp — below threshold for soft evidence.
+- **Lutnick May 1 (12-15c):** 20-25% estimate, edge 5-8pp. Below threshold.
+- **Kash Patel May 1 (31-37c):** 6c spread, illiquid. Market roughly efficient.
+- **Next AG (KXNEXTAG-29):** Zero liquidity across all candidates.
+- **IPO markets:** All illiquid, wide spreads.
+- **Supreme Court tariff (KXDJTVOSTARIFFS):** Already resolved NO (Feb 2026). SCOTUS struck down IEEPA tariffs.
+
+**Process notes:**
+- `search` function returns empty for many queries — it only matches event titles. For broader discovery, `quick` scan is more reliable.
+- Most Kalshi markets outside the top 5-10 by volume have zero liquidity. The platform is dominated by a few active political/macro themes.
+- DB was reset between sessions — trade history lost. Need to check if this is intentional or a bug.
+- Live trading is now active. Fees are real ($0.06 on this trade = ~1.5% of cost).
+
+### 2026-04-04 — User Rationale: Trump/Iran
+
+**Thesis:** User asked about Trump's stance on Iran.
+
+**Research findings:** US is in week 6 of active war with Iran ("Operation Epic Fury"). Timeline: nuclear talks in Oman collapsed late Feb → US/Israel strikes began Feb 28 → Trump addressed nation Apr 1 saying war "nearing completion" → threatened to destroy power plants/desalination by Apr 6 deadline if no deal. Iran denies any negotiations. This is the dominant geopolitical story globally.
+
+**Market availability:** Kalshi has virtually nothing tradeable on Iran. Only a "Next Supreme Leader" market with zero volume. No war outcome, ceasefire, oil price, Strait of Hormuz, or sanctions markets exist on the platform.
+
+**Lesson:** Kalshi's market coverage is extremely thin on geopolitical/war themes. The biggest story in the world has no tradeable market. The platform is dominated by US politics (cabinet departures), entertainment (Netflix), weather, and gas prices. For Iran-related trading, would need a different platform (Polymarket, Metaculus, etc.).

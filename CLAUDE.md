@@ -91,8 +91,8 @@ PYTHONPATH=. python3 gossip/trader.py history
 
 ## Current State (April 4, 2026)
 
-- Paper trading with $30 bankroll
-- 2 open positions: Bondi AG departure (near-arb), Chavez-DeRemer Labor departure
+- Paper trading with $15 bankroll
+- DB wiped, clean slate — starting fresh
 - Agent writes strategy notes after each cycle
 - Dashboard at http://localhost:3000 with live streaming
 - Quick scan works (~5s), trades execute with real orderbook prices
