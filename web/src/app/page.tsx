@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 
 interface Portfolio {
   bankroll: number;
@@ -48,18 +48,30 @@ interface AgentCycle {
   output_summary: string;
 }
 
-type Tab = "positions" | "trades" | "news" | "agent";
+interface StreamLine {
+  type: string;
+  text?: string;
+  tool?: string;
+  input?: string;
+  result?: string;
+}
+
+type Tab = "positions" | "trades" | "news" | "agent" | "live";
 
 export default function Dashboard() {
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [news, setNews] = useState<NewsArticle[]>([]);
   const [cycles, setCycles] = useState<AgentCycle[]>([]);
-  const [tab, setTab] = useState<Tab>("positions");
+  const [tab, setTab] = useState<Tab>("live");
   const [rationale, setRationale] = useState("");
   const [customPrompt, setCustomPrompt] = useState("");
   const [agentStatus, setAgentStatus] = useState("");
   const [loopInterval, setLoopInterval] = useState(900);
+  const [streamLines, setStreamLines] = useState<StreamLine[]>([]);
+  const [liveStatus, setLiveStatus] = useState<string>("idle");
+  const streamOffset = useRef(0);
+  const liveEndRef = useRef<HTMLDivElement>(null);
 
   const fetchAll = useCallback(async () => {
     try {
@@ -84,8 +96,36 @@ export default function Dashboard() {
     return () => clearInterval(id);
   }, [fetchAll]);
 
+  // Poll live stream
+  useEffect(() => {
+    const pollStream = async () => {
+      try {
+        const res = await fetch(`/api/agent/stream?offset=${streamOffset.current}`);
+        const data = await res.json();
+        setLiveStatus(data.status?.status || "idle");
+        if (data.lines.length > 0) {
+          setStreamLines((prev) => [...prev, ...data.lines]);
+          streamOffset.current = data.offset;
+          liveEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        }
+        // Reset when a new cycle starts (offset reset)
+        if (data.offset < streamOffset.current) {
+          setStreamLines([]);
+          streamOffset.current = 0;
+        }
+      } catch {
+        // ignore
+      }
+    };
+    const id = setInterval(pollStream, 1000);
+    return () => clearInterval(id);
+  }, []);
+
   const runCycle = async (prompt?: string) => {
     setAgentStatus("Starting cycle...");
+    setStreamLines([]);
+    streamOffset.current = 0;
+    setTab("live");
     const res = await fetch("/api/agent", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -158,11 +198,19 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {agentStatus && (
-          <div className="mb-4 px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-zinc-400">
-            {agentStatus}
-          </div>
-        )}
+        {/* Live status indicator */}
+        <div className="mb-4 px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-sm flex items-center gap-3">
+          <span className={`w-2.5 h-2.5 rounded-full ${
+            liveStatus === "running" ? "bg-emerald-500 animate-pulse" :
+            liveStatus === "error" ? "bg-red-500" : "bg-zinc-600"
+          }`} />
+          <span className="text-zinc-400">
+            {liveStatus === "running" ? "Agent is running..." :
+             liveStatus === "error" ? "Last cycle errored" :
+             "Agent idle"}
+          </span>
+          {agentStatus && <span className="text-zinc-600 ml-auto">{agentStatus}</span>}
+        </div>
 
         {portfolio && (
           <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-8">
@@ -251,6 +299,7 @@ export default function Dashboard() {
         {/* Tabs */}
         <div className="flex gap-1 mb-6 border-b border-zinc-800">
           {([
+            ["live", "Live"],
             ["positions", "Positions"],
             ["trades", "Trade History"],
             ["news", "News Feed"],
@@ -269,6 +318,45 @@ export default function Dashboard() {
             </button>
           ))}
         </div>
+
+        {/* Live Stream */}
+        {tab === "live" && (
+          <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 font-mono text-sm max-h-[600px] overflow-y-auto">
+            {streamLines.length === 0 && liveStatus !== "running" && (
+              <p className="text-zinc-500">No live output. Click &quot;Run Cycle&quot; to start the agent.</p>
+            )}
+            {streamLines.length === 0 && liveStatus === "running" && (
+              <p className="text-zinc-500 animate-pulse">Waiting for agent output...</p>
+            )}
+            {streamLines.map((line, i) => (
+              <div key={i} className="mb-2">
+                {line.type === "text" && (
+                  <p className="text-zinc-200 whitespace-pre-wrap">{line.text}</p>
+                )}
+                {line.type === "tool_use" && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs px-2 py-0.5 bg-blue-900/50 text-blue-400 rounded">
+                      {line.tool}
+                    </span>
+                    <span className="text-zinc-500 text-xs truncate">{line.input}</span>
+                  </div>
+                )}
+                {line.type === "tool_result" && (
+                  <pre className="text-zinc-500 text-xs bg-zinc-950 p-2 rounded overflow-x-auto max-h-32 overflow-y-auto">
+                    {line.text}
+                  </pre>
+                )}
+                {line.type === "result" && (
+                  <div className="mt-2 p-2 border border-emerald-800 rounded bg-emerald-950/30">
+                    <p className="text-emerald-400 text-xs font-bold mb-1">CYCLE COMPLETE</p>
+                    <p className="text-zinc-300 text-xs whitespace-pre-wrap">{line.result}</p>
+                  </div>
+                )}
+              </div>
+            ))}
+            <div ref={liveEndRef} />
+          </div>
+        )}
 
         {/* Positions */}
         {tab === "positions" && (

@@ -83,8 +83,17 @@ Scan markets: `python3 gossip/kalshi.py scan` or `python3 gossip/kalshi.py searc
 """
 
 
+LIVE_LOG = DATA_DIR / "agent_live.jsonl"
+LIVE_STATUS = DATA_DIR / "agent_status.json"
+
+
+def write_status(status: str, **extra) -> None:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    LIVE_STATUS.write_text(json.dumps({"status": status, "timestamp": _now(), **extra}))
+
+
 def run_agent(prompt: str, timeout: int = 600) -> dict:
-    """Spawn Claude Code as a subprocess. Fresh session each time."""
+    """Spawn Claude Code as a subprocess. Stream output to live log file."""
     cmd = [
         "claude",
         "--print", "-",
@@ -98,42 +107,76 @@ def run_agent(prompt: str, timeout: int = 600) -> dict:
         "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT",
     }}
 
-    start = time.time()
-    try:
-        result = subprocess.run(
-            cmd, input=prompt, capture_output=True, text=True,
-            timeout=timeout, env=env, cwd=str(PROJECT_DIR),
-        )
-    except subprocess.TimeoutExpired:
-        return {"status": "timeout", "duration_s": timeout, "timestamp": _now()}
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    # Clear live log for this cycle
+    LIVE_LOG.write_text("")
+    write_status("running")
 
-    duration = round(time.time() - start, 1)
+    start = time.time()
     session_id = None
     agent_output = ""
 
-    for line in result.stdout.strip().split("\n"):
-        if not line.strip():
-            continue
-        try:
-            msg = json.loads(line)
-            if msg.get("type") == "system" and "session_id" in msg:
-                session_id = msg["session_id"]
-            if msg.get("type") == "result":
-                agent_output = msg.get("result", "")
-            if msg.get("type") == "assistant" and msg.get("message"):
-                for block in msg["message"].get("content", []):
-                    if isinstance(block, dict) and block.get("type") == "text":
-                        agent_output += block.get("text", "") + "\n"
-        except json.JSONDecodeError:
-            continue
+    try:
+        proc = subprocess.Popen(
+            cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, text=True, env=env, cwd=str(PROJECT_DIR),
+        )
+        # Send prompt and close stdin
+        proc.stdin.write(prompt)
+        proc.stdin.close()
+
+        # Stream stdout line by line to live log
+        with open(LIVE_LOG, "a") as logf:
+            for line in proc.stdout:
+                line = line.strip()
+                if not line:
+                    continue
+                # Write raw line to live log for streaming
+                logf.write(line + "\n")
+                logf.flush()
+
+                try:
+                    msg = json.loads(line)
+                    if msg.get("type") == "system" and "session_id" in msg:
+                        session_id = msg["session_id"]
+                    if msg.get("type") == "result":
+                        agent_output = msg.get("result", "")
+                    if msg.get("type") == "assistant" and msg.get("message"):
+                        for block in msg["message"].get("content", []):
+                            if isinstance(block, dict) and block.get("type") == "text":
+                                text = block.get("text", "")
+                                agent_output += text + "\n"
+                                write_status("running", last_text=text[:200])
+                    if msg.get("type") == "assistant" and msg.get("message"):
+                        for block in msg["message"].get("content", []):
+                            if isinstance(block, dict) and block.get("type") == "tool_use":
+                                tool = block.get("name", "")
+                                write_status("running", tool=tool)
+                except json.JSONDecodeError:
+                    continue
+
+                if time.time() - start > timeout:
+                    proc.kill()
+                    write_status("timeout")
+                    return {"status": "timeout", "duration_s": timeout, "timestamp": _now()}
+
+        proc.wait()
+
+    except Exception as e:
+        write_status("error", error=str(e))
+        return {"status": "error", "duration_s": round(time.time() - start, 1), "timestamp": _now(), "error": str(e)}
+
+    duration = round(time.time() - start, 1)
 
     cycle_result = {
         "timestamp": _now(),
-        "status": "ok" if result.returncode == 0 else "error",
+        "status": "ok" if proc.returncode == 0 else "error",
         "duration_s": duration,
         "session_id": session_id,
-        "output": agent_output[:2000] if agent_output else result.stderr[:2000],
+        "output": agent_output[:2000] if agent_output else "",
     }
+
+    write_status("idle", last_cycle=duration)
 
     # Log to DB
     try:
