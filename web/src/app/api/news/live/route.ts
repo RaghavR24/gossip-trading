@@ -15,6 +15,7 @@ interface RssItem {
   source: string;
   snippet: string;
   timestamp: string;
+  image: string | null;
 }
 
 function parseRssItems(xml: string): RssItem[] {
@@ -47,14 +48,33 @@ function parseRssItems(xml: string): RssItem[] {
         source,
         snippet: cleanDesc.slice(0, 200),
         timestamp: pubDate ? new Date(pubDate).toISOString() : new Date().toISOString(),
+        image: null,
       });
     }
   }
   return items;
 }
 
+async function fetchOgImage(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(3000),
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1)" },
+      redirect: "follow",
+    });
+    if (!res.ok) return null;
+    const text = await res.text();
+    const head = text.slice(0, 15000);
+    const ogMatch = head.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i)
+      || head.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:image["']/i);
+    return ogMatch?.[1] || null;
+  } catch {
+    return null;
+  }
+}
+
 let cache: { items: RssItem[]; fetchedAt: number } = { items: [], fetchedAt: 0 };
-const CACHE_TTL = 120_000; // 2 minutes
+const CACHE_TTL = 120_000;
 
 export async function GET() {
   const now = Date.now();
@@ -90,6 +110,18 @@ export async function GET() {
     (item, i, arr) => arr.findIndex((x) => x.title === item.title) === i
   );
 
-  cache = { items: deduped.slice(0, 40), fetchedAt: now };
+  const top = deduped.slice(0, 30);
+
+  const imageResults = await Promise.allSettled(
+    top.map((item) => fetchOgImage(item.url))
+  );
+  for (let i = 0; i < top.length; i++) {
+    const r = imageResults[i];
+    if (r.status === "fulfilled" && r.value) {
+      top[i].image = r.value;
+    }
+  }
+
+  cache = { items: top, fetchedAt: now };
   return NextResponse.json(cache.items);
 }

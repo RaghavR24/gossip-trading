@@ -51,7 +51,7 @@ export default function Dashboard() {
       const res = await fetch("/api/news/live");
       const data = await res.json();
       setLiveNews(
-        data.map((item: Record<string, string>, i: number) => ({
+        data.map((item: Record<string, string | null>, i: number) => ({
           id: -(i + 1),
           timestamp: item.timestamp,
           source: item.source,
@@ -59,6 +59,7 @@ export default function Dashboard() {
           title: item.title,
           url: item.url,
           snippet: item.snippet,
+          image: item.image || null,
         }))
       );
     } catch {
@@ -165,14 +166,14 @@ export default function Dashboard() {
 
       <div className="flex-1 grid grid-cols-1 md:grid-cols-[minmax(0,280px)_minmax(0,1fr)] lg:grid-cols-[minmax(0,280px)_minmax(0,1fr)_minmax(0,340px)] min-h-0 overflow-hidden">
         {/* Left column: Positions + Markets */}
-        <div className="hidden md:flex flex-col border-r border-border min-h-0">
-          <div className="flex-1 min-h-0">
+        <div className="hidden md:flex flex-col border-r border-border min-h-0 overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-hidden">
             <PositionsPanel
               positions={portfolio?.open_positions ?? []}
               trades={trades}
             />
           </div>
-          <div className="h-[40%] min-h-0">
+          <div className="h-[40%] min-h-0 overflow-hidden border-t border-border">
             <MarketScanner markets={markets} />
           </div>
         </div>

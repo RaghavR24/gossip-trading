@@ -44,8 +44,8 @@ export async function GET(request: Request) {
                   type: "tool_use",
                   tool: block.name,
                   input: typeof block.input === "string"
-                    ? block.input.slice(0, 200)
-                    : JSON.stringify(block.input).slice(0, 200),
+                    ? block.input.slice(0, 500)
+                    : JSON.stringify(block.input).slice(0, 500),
                 });
               }
             }
@@ -61,14 +61,14 @@ export async function GET(request: Request) {
                   lines.push({
                     type: "tool_result",
                     tool_use_id: block.tool_use_id,
-                    text: text.slice(0, 500),
+                    text: text.slice(0, 2000),
                   });
                 }
               }
             }
           }
           if (msg.type === "result") {
-            lines.push({ type: "result", result: msg.result?.slice(0, 500) });
+            lines.push({ type: "result", result: msg.result?.slice(0, 5000) });
           }
         } catch {
           // skip unparseable lines

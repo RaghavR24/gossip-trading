@@ -43,6 +43,7 @@ export interface NewsArticle {
   title: string;
   url: string;
   snippet: string;
+  image?: string | null;
 }
 
 export interface Market {
@@ -79,13 +80,18 @@ export interface StreamLine {
   result?: string;
 }
 
-export function kalshiUrl(ticker: string): string {
-  // Derive event ticker: everything before the second hyphen-group
-  // KXBONDIOUT-26APR-APR05 → event = KXBONDIOUT
-  // KXDEREMEROUT-26-MAY01 → event = KXDEREMEROUT
-  // KXHIGHNY-26APR04-T75 → event = KXHIGHNY
+export function kalshiUrl(ticker: string, title?: string): string {
   const parts = ticker.split("-");
   const event = parts[0].toLowerCase();
   const full = ticker.toLowerCase();
-  return `https://kalshi.com/markets/${event}/${full}`;
+  const slug = title
+    ? title
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, "")
+        .replace(/\s+/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-|-$/g, "")
+        .slice(0, 60)
+    : event;
+  return `https://kalshi.com/markets/${event}/${slug}/${full}`;
 }
