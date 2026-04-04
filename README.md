@@ -6,6 +6,8 @@ Built for the [Entrepreneur First](https://www.joinef.com/) AI Agent Hackathon. 
 
 The "gossip" is the signal. News breaks, rumors spread, data drops — and markets lag. This agent closes the gap.
 
+![Architecture](Screenshot%202026-04-04%20at%203.16.11%20PM.png)
+
 ---
 
 ## How It Works
