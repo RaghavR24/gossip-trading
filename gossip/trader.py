@@ -215,7 +215,7 @@ async def execute_trade(
     news_trigger: str = "",
     sources: list[str] | None = None,
 ) -> dict:
-    from gossip.kalshi import get_market_detail, kalshi_fee as kfee
+    from gossip.kalshi import get_market_detail, get_orderbook as fetch_orderbook, kalshi_fee as kfee
 
     detail = await get_market_detail(ticker)
     market = detail.get("market", {})
@@ -224,8 +224,28 @@ async def execute_trade(
 
     title = market.get("title", "?")
     category = market.get("category", "?")
-    bid = float(market.get("yes_bid_dollars", "0") or "0")
-    ask = float(market.get("yes_ask_dollars", "0") or "0")
+
+    # Use orderbook for real best bid/ask, fall back to market summary
+    orderbook = detail.get("orderbook", {})
+    if not orderbook:
+        orderbook = await fetch_orderbook(ticker)
+
+    yes_bids = orderbook.get("yes", []) if orderbook else []
+    no_bids = orderbook.get("no", []) if orderbook else []
+
+    # Market summary prices (may be stale)
+    summary_bid = float(market.get("yes_bid_dollars", "0") or "0")
+    summary_ask = float(market.get("yes_ask_dollars", "0") or "0")
+
+    # Best bid/ask from orderbook (more accurate)
+    ob_yes_bid = max((float(b[0]) / 100 for b in yes_bids), default=summary_bid) if yes_bids else summary_bid
+    ob_yes_ask = min((float(a[0]) / 100 for a in no_bids), default=summary_ask) if no_bids else summary_ask
+
+    # Use orderbook prices if available, otherwise summary
+    bid = ob_yes_bid if ob_yes_bid > 0 else summary_bid
+    ask = ob_yes_ask if ob_yes_ask > 0 else summary_ask
+
+    log(f"TRADE PRICING for {ticker}: yes_bid={bid:.4f} yes_ask={ask:.4f} (summary: bid={summary_bid:.4f} ask={summary_ask:.4f})")
 
     if side == "yes":
         entry_price = ask
@@ -233,6 +253,9 @@ async def execute_trade(
     else:
         entry_price = 1.0 - bid
         edge = (1 - estimated_prob) - (1 - bid)
+
+    if entry_price <= 0 or entry_price >= 1:
+        return {"error": f"Invalid entry price {entry_price:.4f} for {side} side (bid={bid:.4f} ask={ask:.4f})"}
 
     cost = entry_price * contracts
     fee = kalshi_fee(contracts, entry_price)
@@ -242,6 +265,9 @@ async def execute_trade(
     risk = check_risk(portfolio, ticker, cost + fee)
     if not risk["ok"]:
         return {"error": "Risk check failed", "issues": risk["issues"]}
+
+    price_detail = f"yes_bid={bid:.4f} yes_ask={ask:.4f} | entry={entry_price:.4f} ({side})"
+    full_reasoning = f"{reasoning}\n[Prices at execution: {price_detail}]"
 
     trade = Trade(
         timestamp=datetime.now(timezone.utc).isoformat(),
@@ -257,7 +283,7 @@ async def execute_trade(
         estimated_prob=estimated_prob,
         edge=round(edge, 4),
         confidence=confidence,
-        reasoning=reasoning,
+        reasoning=full_reasoning,
         news_trigger=news_trigger,
         sources=sources or [],
     )
@@ -274,7 +300,7 @@ async def execute_trade(
             contracts=contracts, entry_price=round(entry_price, 4),
             cost=round(cost, 2), fee=round(fee, 4),
             estimated_prob=estimated_prob, edge=round(edge, 4),
-            confidence=confidence, reasoning=reasoning,
+            confidence=confidence, reasoning=full_reasoning,
             news_trigger=news_trigger, sources=sources or [],
         )
     except Exception as e:
@@ -289,6 +315,10 @@ async def execute_trade(
         "cost": trade.cost,
         "fee": trade.fee,
         "edge": trade.edge,
+        "yes_bid": bid,
+        "yes_ask": ask,
+        "summary_bid": summary_bid,
+        "summary_ask": summary_ask,
         "bankroll_remaining": portfolio.bankroll,
         "title": title,
     }

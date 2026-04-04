@@ -381,6 +381,8 @@ async def main():
         # persist snapshots to DB
         if results:
             try:
+                import sys as _sys
+                _sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
                 from gossip.db import GossipDB
                 db = GossipDB()
                 db.insert_market_snapshots(results)
