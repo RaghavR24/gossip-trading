@@ -428,7 +428,7 @@ async def search_events(query: str) -> list[dict]:
 
         return results
 
-async def quick_scan(categories: set[str] | None = None, max_days: int = 30, min_volume: float = 0, sort: str = "mixed") -> list[dict]:
+async def quick_scan(categories: set[str] | None = None, exclude_categories: set[str] | None = None, max_days: int = 30, min_volume: float = 0, sort: str = "mixed") -> list[dict]:
     """Scan all open events with nested markets. Paginates up to 6000 events (~10-15s)."""
     async with aiohttp.ClientSession() as session:
         all_markets = []
@@ -444,6 +444,8 @@ async def quick_scan(categories: set[str] | None = None, max_days: int = 30, min
             for e in events:
                 cat = e.get("category", "")
                 if categories and cat not in categories:
+                    continue
+                if exclude_categories and cat in exclude_categories:
                     continue
                 for m in e.get("markets", []):
                     parsed = parse_market(m, cat)
@@ -548,7 +550,8 @@ async def main():
     scan_p.add_argument("--limit", type=int, default=50)
 
     quick_p = sub.add_parser("quick", help="Fast scan via events endpoint (~10s)")
-    quick_p.add_argument("--categories", type=str, default=None)
+    quick_p.add_argument("--categories", type=str, default=None, help="Include only these categories (comma-separated)")
+    quick_p.add_argument("--exclude", type=str, default=None, help="Exclude these categories (comma-separated, e.g. Sports,Entertainment)")
     quick_p.add_argument("--days", type=int, default=30)
     quick_p.add_argument("--min-volume", type=float, default=0)
     quick_p.add_argument("--sort", choices=["volume", "recent", "mixed"], default="mixed")
@@ -605,7 +608,8 @@ async def main():
 
     elif args.command == "quick":
         cats = set(args.categories.split(",")) if args.categories else None
-        markets = await quick_scan(categories=cats, max_days=args.days, min_volume=args.min_volume, sort=args.sort)
+        excl = set(args.exclude.split(",")) if args.exclude else None
+        markets = await quick_scan(categories=cats, exclude_categories=excl, max_days=args.days, min_volume=args.min_volume, sort=args.sort)
         results = [asdict(m) for m in markets[:args.limit]]
 
         if results:

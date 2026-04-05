@@ -48,9 +48,11 @@ Then run a full trading cycle:
 
 2. MARKET DISCOVERY — you have several tools, use whichever combination fits:
    Scanning:
-   - `PYTHONPATH=. python3 gossip/kalshi.py quick --limit 40` — broad overview (default: mixed sort, shows both high-volume and recent markets). Note: output shows top N of thousands — use --limit, --sort, or search to explore further.
+   - `PYTHONPATH=. python3 gossip/kalshi.py quick --limit 40` — broad overview (default: mixed sort). Note: output shows top N of thousands — use --limit, --sort, --exclude, --categories, or search to explore further.
    - `PYTHONPATH=. python3 gossip/kalshi.py quick --sort volume --limit 30` — most liquid markets
    - `PYTHONPATH=. python3 gossip/kalshi.py quick --sort recent --limit 30` — newest/soonest-closing markets (often mispriced)
+   - Filter by category: `--categories Politics,Economics` (include only) or `--exclude Sports,Entertainment` (skip these)
+   - Available categories: Sports, Crypto, Financials, Entertainment, Economics, Climate and Weather, Mentions, Science and Technology, Politics, Elections, Companies, World
    Searching:
    - `PYTHONPATH=. python3 gossip/kalshi.py search "topic"` — search all open events + series by keyword
    News & social intelligence (via Apify — these give you data WebSearch can't):
