@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-const NEWS_API_KEY = process.env.NEWS_API_KEY || "813a01019fad42ed9dadc7793c60c386";
+const NEWS_API_KEY = process.env.NEWS_API_KEY || "";
 
 interface NewsItem {
   title: string;
@@ -16,10 +16,19 @@ const QUERIES = [
   "tariffs OR trade war OR sanctions",
   "federal reserve OR interest rates OR inflation",
   "trump cabinet OR attorney general OR secretary",
+  "Iran nuclear OR Iran war OR Iran military",
 ];
 
+const NEWS_DOMAINS = [
+  "reuters.com", "apnews.com", "bloomberg.com", "cnbc.com", "cnn.com",
+  "foxnews.com", "bbc.com", "nytimes.com", "washingtonpost.com",
+  "wsj.com", "politico.com", "thehill.com", "axios.com",
+  "ft.com", "theguardian.com", "npr.org", "nbcnews.com",
+  "abcnews.go.com", "cbsnews.com", "marketwatch.com",
+].join(",");
+
 let cache: { items: NewsItem[]; fetchedAt: number } = { items: [], fetchedAt: 0 };
-const CACHE_TTL = 120_000;
+const CACHE_TTL = 1_800_000;
 
 export async function GET() {
   const now = Date.now();
@@ -36,6 +45,7 @@ export async function GET() {
         language: "en",
         sortBy: "publishedAt",
         pageSize: "10",
+        domains: NEWS_DOMAINS,
         apiKey: NEWS_API_KEY,
       });
       const res = await fetch(

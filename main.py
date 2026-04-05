@@ -38,43 +38,61 @@ Check data/user_rationales.json for any pending user theses to research.
 
 Then run a full trading cycle:
 
-1. AUTO-SETTLE resolved markets first:
-   `PYTHONPATH=. python3 gossip/trader.py check-settled`
-   This checks Kalshi for any markets that have resolved and auto-settles them, returning capital to bankroll.
+1. HOUSEKEEPING:
+   `PYTHONPATH=. python3 gossip/trader.py check-settled` — auto-settle any resolved markets.
+   `PYTHONPATH=. python3 gossip/trader.py portfolio` — check bankroll and open positions.
+   If you have open positions, also run:
+   `PYTHONPATH=. python3 gossip/trader.py prices` — current prices + unrealized P&L.
+   For each open position: verify thesis still holds (web search the event, not just the price). EXIT if thesis is dead, HOLD if edge remains, consider SELL if price moved 15c+ toward your target.
+   `PYTHONPATH=. python3 gossip/trader.py exit TICKER --reasoning "..."`
 
-2. Check portfolio and live prices:
-   `PYTHONPATH=. python3 gossip/trader.py portfolio`
-   `PYTHONPATH=. python3 gossip/trader.py prices`
-   Review each open position's unrealized P&L and current market price vs your entry.
+2. MARKET DISCOVERY — you have several tools, use whichever combination fits:
+   Scanning:
+   - `PYTHONPATH=. python3 gossip/kalshi.py quick --limit 40` — broad overview (default: mixed sort, shows both high-volume and recent markets). Note: output shows top N of thousands — use --limit, --sort, or search to explore further.
+   - `PYTHONPATH=. python3 gossip/kalshi.py quick --sort volume --limit 30` — most liquid markets
+   - `PYTHONPATH=. python3 gossip/kalshi.py quick --sort recent --limit 30` — newest/soonest-closing markets (often mispriced)
+   Searching:
+   - `PYTHONPATH=. python3 gossip/kalshi.py search "topic"` — search all open events + series by keyword
+   News-driven discovery:
+   - `PYTHONPATH=. python3 gossip/news.py --source google --keywords "topic1,topic2"` — sweep Google News
+   - `PYTHONPATH=. python3 gossip/news.py --source twitter --keywords "topic"` — Twitter/X chatter from journalists and insiders
+   - Web search for breaking news
+   Common patterns that work well:
+   - Scan headlines/news first, then search Kalshi for markets related to what you find
+   - Use `quick --sort recent` to spot new markets before they're efficiently priced
+   - When you already know a topic is hot, go straight to `search` instead of scanning
+   - Skip sports, entertainment, and markets with spread > 15c
 
-3. POSITION REVIEW — for each open position:
-   - If current price moved significantly toward your thesis (e.g. YES at 95c+ when you entered at 82c), consider selling now to lock profit vs waiting for settlement.
-   - If thesis has weakened or news contradicts it, EXIT: `PYTHONPATH=. python3 gossip/trader.py exit TICKER --reasoning "..."`
-   - If thesis still holds and edge remains, HOLD.
-   - Use web search to verify — don't just check prices, check if the underlying event happened.
-
-4. MARKET DISCOVERY — use targeted searches, not just broad scans:
-   - `PYTHONPATH=. python3 gossip/kalshi.py quick --limit 60` for broad overview
-   - `PYTHONPATH=. python3 gossip/kalshi.py search "specific topic"` for targeted lookups
-   - Focus on categories where news creates edge: Politics, Economics, Macro events
-   - Search for current events you already know about from news/web search
-   - Skip sports, entertainment, and illiquid markets (volume < 500, spread > 15c)
-
-5. RESEARCH — pick 3-5 promising markets:
+3. RESEARCH — pick 3-5 promising markets:
    - Use web search to find relevant news and primary sources
-   - Use `PYTHONPATH=. python3 gossip/news.py --keywords "..."` for broader news scraping
+   - news.py can add depth when web search snippets aren't enough:
+     `PYTHONPATH=. python3 gossip/news.py --source twitter --keywords "topic"` — insider signals, leak chatter, engagement levels
+     `PYTHONPATH=. python3 gossip/news.py --source article --urls "url1,url2"` — extract full article text (3000 chars) from URLs you found
+     Twitter is especially valuable for political/cabinet markets — leaks surface there first.
    - Estimate the true probability based on evidence
-   - Look for near-arbitrage: events that already happened but market hasn't caught up
+   - When a market has related contracts (e.g. different timeframes or outcomes), compare them — pick the one where your edge is best supported by the evidence you actually have
 
-6. TRADE if you find edge > 10pp with clear reasoning:
-   Before executing, answer in one line: "Evidence type: [hard/soft/speculation]. Weakest assumption: [X]."
+4. BEFORE TRADING — read settlement rules and verify:
+   `PYTHONPATH=. python3 gossip/kalshi.py rules TICKER`
+   This is non-negotiable. Kalshi rules define exactly what triggers settlement — it's often stricter than you'd assume.
+   Common traps:
+   - "Must have actual departure date" — being fired/announced isn't enough, they must vacate the role
+   - "Announcements of intent to depart are not sufficient" — the event must actually happen
+   - "Sources from [specific list]" — only certain outlets count for resolution
+   - Time windows: "before May 1" means the event must occur in that window, not just be announced
+   If you can't explain how the rules map to your evidence, you don't have a trade.
+
+5. TRADE if you find edge > 10pp with clear reasoning:
+   Before executing, answer: "Evidence: [hard/soft/speculation]. Weakest assumption: [X]. Settlement criteria met: [yes/pending/no]."
+   If settlement criteria are not yet met, discount your estimate accordingly.
    If the evidence is speculation, PASS unless edge is overwhelming (>25pp).
-   If you can't name what would make you wrong, your thesis isn't specific enough — PASS.
+   If you can't name what would make you wrong, PASS.
    `PYTHONPATH=. python3 gossip/trader.py trade TICKER --side yes/no --estimate 0.XX --confidence high/medium --reasoning "..."`
 
-7. Update data/strategy_notes.md with what you learned this cycle.
+6. Update data/strategy_notes.md with what you learned this cycle. Keep it under 80 lines — prune stale price observations and resolved-market notes. Only keep lessons that generalize to future trades.
 
 EXECUTION DISCIPLINE:
+- FAST PATH: If you find near-arbitrage, breaking news to buy on, OR breaking news that invalidates an open position — act immediately. Don't finish the full scan before exiting a position that's about to collapse.
 - Be decisive. Research → conclude → act. Don't loop endlessly.
 - For each market: reach a YES/NO/PASS decision within 2-3 tool calls.
 - Evaluate 3-5 markets per cycle, trade the best 1-2. Don't try to cover everything.
@@ -91,16 +109,15 @@ A user has submitted this thesis for you to research and potentially trade on:
 USER THESIS: {rationale}
 
 Your job:
-1. Research this thesis thoroughly using web search and news scraping.
-2. Find evidence for AND against.
-3. Estimate the probability if there's a relevant Kalshi market.
-4. If you find a market with edge based on this thesis, trade it.
-5. If the thesis doesn't hold up, explain why and pass.
-6. Update data/user_rationales.json with your findings.
-7. Update data/strategy_notes.md if you learned something new.
-
-Check portfolio first: `PYTHONPATH=. python3 gossip/trader.py portfolio`
-Scan markets: `PYTHONPATH=. python3 gossip/kalshi.py scan` or `PYTHONPATH=. python3 gossip/kalshi.py search "relevant keywords"`
+1. Check portfolio: `PYTHONPATH=. python3 gossip/trader.py portfolio`
+2. Research this thesis thoroughly using web search and news scraping.
+3. Find evidence for AND against.
+4. Search for relevant Kalshi markets: `PYTHONPATH=. python3 gossip/kalshi.py search "relevant keywords"`
+5. If you find a market, READ THE SETTLEMENT RULES first: `PYTHONPATH=. python3 gossip/kalshi.py rules TICKER`
+6. Estimate the probability. Before trading, answer: "Evidence: [hard/soft/speculation]. Settlement criteria met: [yes/pending/no]."
+7. If you find edge based on this thesis, trade it. If the thesis doesn't hold up, explain why and pass.
+8. Update data/user_rationales.json with your findings.
+9. Update data/strategy_notes.md if you learned something new.
 """
 
 
@@ -147,13 +164,24 @@ def run_agent(prompt: str, timeout: int = 600) -> dict:
         proc.stdin.write(prompt)
         proc.stdin.close()
 
+        # Watchdog thread kills the process if timeout is exceeded
+        import threading
+        def _watchdog():
+            deadline = start + timeout
+            while proc.poll() is None:
+                if time.time() > deadline:
+                    proc.kill()
+                    break
+                time.sleep(5)
+        wd = threading.Thread(target=_watchdog, daemon=True)
+        wd.start()
+
         # Stream stdout line by line to live log
         with open(LIVE_LOG, "a") as logf:
             for line in proc.stdout:
                 line = line.strip()
                 if not line:
                     continue
-                # Write raw line to live log for streaming
                 logf.write(line + "\n")
                 logf.flush()
 
@@ -177,12 +205,11 @@ def run_agent(prompt: str, timeout: int = 600) -> dict:
                 except json.JSONDecodeError:
                     continue
 
-                if time.time() - start > timeout:
-                    proc.kill()
-                    write_status("timeout")
-                    return {"status": "timeout", "duration_s": timeout, "timestamp": _now()}
-
         proc.wait()
+
+        if proc.returncode == -9:
+            write_status("timeout")
+            return {"status": "timeout", "duration_s": timeout, "timestamp": _now()}
 
     except Exception as e:
         write_status("error", error=str(e))

@@ -292,7 +292,7 @@ export default function Dashboard() {
         onLoopIntervalChange={setLoopInterval}
       />
 
-      <PortfolioStrip portfolio={portfolio} unrealizedPnl={prices.reduce((s, p) => s + p.unrealized_pnl, 0)} />
+      <PortfolioStrip portfolio={portfolio} />
 
       <div className="flex-1 grid grid-cols-1 md:grid-cols-[minmax(0,280px)_minmax(0,1fr)] lg:grid-cols-[minmax(0,280px)_minmax(0,1fr)_minmax(0,340px)] min-h-0 overflow-hidden">
         {/* Left column: Positions + Markets */}

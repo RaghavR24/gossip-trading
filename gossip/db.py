@@ -152,19 +152,23 @@ class GossipDB:
 
         cols = ", ".join(kwargs.keys())
         placeholders = ", ".join("?" * len(kwargs))
-        cur = self.conn.execute(
-            f"INSERT INTO trades ({cols}) VALUES ({placeholders})",
-            list(kwargs.values()),
-        )
-        self.conn.commit()
 
-        # Update portfolio
-        p = self.get_portfolio()
-        cost = kwargs.get("cost", 0) + kwargs.get("fee", 0)
-        self.update_portfolio(
-            bankroll=round(p["bankroll"] - cost, 2),
-            total_trades=p["total_trades"] + 1,
-        )
+        self.conn.execute("BEGIN IMMEDIATE")
+        try:
+            cur = self.conn.execute(
+                f"INSERT INTO trades ({cols}) VALUES ({placeholders})",
+                list(kwargs.values()),
+            )
+            p = self.get_portfolio()
+            cost = kwargs.get("cost", 0) + kwargs.get("fee", 0)
+            self.conn.execute(
+                "UPDATE portfolio SET bankroll=?, total_trades=?, updated_at=? WHERE id=1",
+                (round(p["bankroll"] - cost, 2), p["total_trades"] + 1, _now()),
+            )
+            self.conn.commit()
+        except Exception:
+            self.conn.rollback()
+            raise
         return cur.lastrowid
 
     def get_open_positions(self) -> list[dict]:
@@ -196,17 +200,24 @@ class GossipDB:
             pnl = round(-trade["entry_price"] * trade["contracts"], 2)
             outcome = "loss"
 
-        self.conn.execute(
-            "UPDATE trades SET settled=1, outcome=?, pnl=?, exit_timestamp=? WHERE id=?",
-            (outcome, pnl, _now(), trade["id"]),
-        )
-        self.conn.commit()
-
-        p = self.get_portfolio()
-        bankroll = round(p["bankroll"] + trade["entry_price"] * trade["contracts"] + pnl, 2)
-        wins = p["wins"] + (1 if won else 0)
-        losses = p["losses"] + (0 if won else 1)
-        self.update_portfolio(bankroll=bankroll, total_pnl=round(p["total_pnl"] + pnl, 2), wins=wins, losses=losses)
+        self.conn.execute("BEGIN IMMEDIATE")
+        try:
+            self.conn.execute(
+                "UPDATE trades SET settled=1, outcome=?, pnl=?, exit_timestamp=? WHERE id=?",
+                (outcome, pnl, _now(), trade["id"]),
+            )
+            p = self.get_portfolio()
+            bankroll = round(p["bankroll"] + trade["entry_price"] * trade["contracts"] + pnl, 2)
+            wins = p["wins"] + (1 if won else 0)
+            losses = p["losses"] + (0 if won else 1)
+            self.conn.execute(
+                "UPDATE portfolio SET bankroll=?, total_pnl=?, wins=?, losses=?, updated_at=? WHERE id=1",
+                (bankroll, round(p["total_pnl"] + pnl, 2), wins, losses, _now()),
+            )
+            self.conn.commit()
+        except Exception:
+            self.conn.rollback()
+            raise
 
         return {"ticker": ticker, "outcome": outcome, "pnl": pnl, "bankroll": bankroll}
 
@@ -222,18 +233,25 @@ class GossipDB:
         pnl = round((exit_price - trade["entry_price"]) * trade["contracts"], 2)
         outcome = "win" if pnl > 0 else "loss"
 
-        self.conn.execute(
-            "UPDATE trades SET settled=1, outcome=?, pnl=?, exit_price=?, exit_reasoning=?, exit_timestamp=? WHERE id=?",
-            (outcome, pnl, exit_price, reasoning, _now(), trade["id"]),
-        )
-        self.conn.commit()
-
-        p = self.get_portfolio()
-        proceeds = exit_price * trade["contracts"]
-        bankroll = round(p["bankroll"] + proceeds, 2)
-        wins = p["wins"] + (1 if pnl > 0 else 0)
-        losses = p["losses"] + (0 if pnl > 0 else 1)
-        self.update_portfolio(bankroll=bankroll, total_pnl=round(p["total_pnl"] + pnl, 2), wins=wins, losses=losses)
+        self.conn.execute("BEGIN IMMEDIATE")
+        try:
+            self.conn.execute(
+                "UPDATE trades SET settled=1, outcome=?, pnl=?, exit_price=?, exit_reasoning=?, exit_timestamp=? WHERE id=?",
+                (outcome, pnl, exit_price, reasoning, _now(), trade["id"]),
+            )
+            p = self.get_portfolio()
+            proceeds = exit_price * trade["contracts"]
+            bankroll = round(p["bankroll"] + proceeds, 2)
+            wins = p["wins"] + (1 if pnl > 0 else 0)
+            losses = p["losses"] + (0 if pnl > 0 else 1)
+            self.conn.execute(
+                "UPDATE portfolio SET bankroll=?, total_pnl=?, wins=?, losses=?, updated_at=? WHERE id=1",
+                (bankroll, round(p["total_pnl"] + pnl, 2), wins, losses, _now()),
+            )
+            self.conn.commit()
+        except Exception:
+            self.conn.rollback()
+            raise
 
         return {"ticker": ticker, "outcome": outcome, "pnl": pnl, "exit_price": exit_price, "bankroll": bankroll}
 

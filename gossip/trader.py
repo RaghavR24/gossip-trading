@@ -20,7 +20,7 @@ import json
 import math
 import os
 import sys
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -29,8 +29,6 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
-TRADES_FILE = DATA_DIR / "trades.json"
-PORTFOLIO_FILE = DATA_DIR / "portfolio.json"
 
 def log(msg: str) -> None:
     print(msg, file=sys.stderr)
@@ -40,7 +38,7 @@ def get_db():
     return GossipDB()
 
 
-# --- State management ---
+# --- State management (all state lives in SQLite) ---
 
 @dataclass
 class Trade:
@@ -64,19 +62,16 @@ class Trade:
     outcome: str = ""  # "win", "loss", ""
     pnl: float = 0.0
     exit_reasoning: str = ""
+    id: int | None = None
 
 @dataclass
 class Portfolio:
-    bankroll: float = 30.0
+    bankroll: float = 15.0
     total_pnl: float = 0.0
     total_trades: int = 0
     wins: int = 0
     losses: int = 0
-    trades: list[Trade] = field(default_factory=list)
-
-    @property
-    def open_positions(self) -> list[Trade]:
-        return [t for t in self.trades if not t.settled and t.action == "buy"]
+    open_positions: list[Trade] = field(default_factory=list)
 
     @property
     def win_rate(self) -> float:
@@ -90,36 +85,45 @@ class Portfolio:
 
 
 def load_portfolio() -> Portfolio:
-    if not TRADES_FILE.exists():
-        return Portfolio(bankroll=float(os.getenv("BANKROLL", "30.0")))
-
-    try:
-        data = json.loads(TRADES_FILE.read_text())
-        p = Portfolio()
-        p.bankroll = data.get("bankroll", float(os.getenv("BANKROLL", "30.0")))
-        p.total_pnl = data.get("total_pnl", 0.0)
-        p.total_trades = data.get("total_trades", 0)
-        p.wins = data.get("wins", 0)
-        p.losses = data.get("losses", 0)
-        for t in data.get("trades", []):
-            p.trades.append(Trade(**t))
-        return p
-    except Exception as e:
-        log(f"Error loading portfolio: {e}")
-        return Portfolio(bankroll=float(os.getenv("BANKROLL", "30.0")))
-
-
-def save_portfolio(p: Portfolio) -> None:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    data = {
-        "bankroll": round(p.bankroll, 2),
-        "total_pnl": round(p.total_pnl, 2),
-        "total_trades": p.total_trades,
-        "wins": p.wins,
-        "losses": p.losses,
-        "trades": [asdict(t) for t in p.trades],
-    }
-    TRADES_FILE.write_text(json.dumps(data, indent=2))
+    db = get_db()
+    pdata = db.get_portfolio()
+    p = Portfolio(
+        bankroll=pdata["bankroll"],
+        total_pnl=pdata["total_pnl"],
+        total_trades=pdata["total_trades"],
+        wins=pdata["wins"],
+        losses=pdata["losses"],
+    )
+    for row in db.get_open_positions():
+        sources = row.get("sources", "[]")
+        if isinstance(sources, str):
+            try:
+                sources = json.loads(sources)
+            except (json.JSONDecodeError, TypeError):
+                sources = []
+        p.open_positions.append(Trade(
+            id=row["id"],
+            timestamp=row["timestamp"],
+            ticker=row["ticker"],
+            title=row.get("title", ""),
+            category=row.get("category", ""),
+            side=row["side"],
+            action=row.get("action", "buy"),
+            contracts=row["contracts"],
+            entry_price=row["entry_price"],
+            cost=row["cost"],
+            fee=row.get("fee", 0),
+            estimated_prob=row.get("estimated_prob", 0),
+            edge=row.get("edge", 0),
+            confidence=row.get("confidence", ""),
+            reasoning=row.get("reasoning", ""),
+            news_trigger=row.get("news_trigger", ""),
+            sources=sources,
+            settled=bool(row.get("settled", 0)),
+            outcome=row.get("outcome", ""),
+            pnl=row.get("pnl", 0),
+        ))
+    return p
 
 
 # --- Sizing ---
@@ -162,7 +166,8 @@ def kelly_size(
     fee = kalshi_fee(contracts, price)
 
     if cost + fee > bankroll:
-        contracts = max(1, int((bankroll - 0.01) / (price + kalshi_fee(1, price) / 1)))
+        per_contract_fee = kalshi_fee(1, price)
+        contracts = max(1, int((bankroll - 0.01) / (price + per_contract_fee)))
         cost = contracts * price
         fee = kalshi_fee(contracts, price)
 
@@ -302,6 +307,7 @@ async def execute_trade(
     if live_trading:
         from gossip.kalshi import place_order
         price_cents = int(entry_price * 100)
+        max_cost_cents = int((cost + fee + 0.05) * 100)
         order_result = await place_order(
             ticker=ticker,
             action="buy",
@@ -309,29 +315,25 @@ async def execute_trade(
             count=contracts,
             price_cents=price_cents,
             order_type="limit",
+            buy_max_cost=max_cost_cents,
+            sell_position_floor=0,
         )
         if "error" in order_result:
             return {"error": f"Live order failed: {order_result}", "mode": "live"}
         log(f"LIVE ORDER placed: {order_result}")
 
-    portfolio.trades.append(trade)
-    portfolio.bankroll = round(portfolio.bankroll - cost - fee, 2)
-    portfolio.total_trades += 1
-    save_portfolio(portfolio)
+    db = get_db()
+    db.insert_trade(
+        ticker=ticker, title=title, category=category, side=side,
+        contracts=contracts, entry_price=round(entry_price, 4),
+        cost=round(cost, 2), fee=round(fee, 4),
+        estimated_prob=estimated_prob, edge=round(edge, 4),
+        confidence=confidence, reasoning=full_reasoning,
+        news_trigger=news_trigger, sources=sources or [],
+    )
+    portfolio = load_portfolio()
 
-    try:
-        db = get_db()
-        db.insert_trade(
-            ticker=ticker, title=title, category=category, side=side,
-            contracts=contracts, entry_price=round(entry_price, 4),
-            cost=round(cost, 2), fee=round(fee, 4),
-            estimated_prob=estimated_prob, edge=round(edge, 4),
-            confidence=confidence, reasoning=full_reasoning,
-            news_trigger=news_trigger, sources=sources or [],
-        )
-    except Exception as e:
-        log(f"DB write failed (trade still recorded in JSON): {e}")
-
+    rules = detail.get("settlement_rules", "")
     return {
         "status": "executed",
         "mode": "live" if live_trading else "paper",
@@ -349,126 +351,86 @@ async def execute_trade(
         "summary_ask": summary_ask,
         "bankroll_remaining": portfolio.bankroll,
         "title": title,
+        "settlement_rules": rules,
     }
 
 
 async def exit_position(ticker: str, reasoning: str) -> dict:
     from gossip.kalshi import get_market_detail
 
-    portfolio = load_portfolio()
-    open_trade = None
-    for t in reversed(portfolio.trades):
-        if t.ticker == ticker and not t.settled:
-            open_trade = t
-            break
-
-    if not open_trade:
-        return {"error": f"No open position on {ticker}"}
-
     detail = await get_market_detail(ticker)
     market = detail.get("market", {})
     bid = float(market.get("yes_bid_dollars", "0") or "0")
     ask = float(market.get("yes_ask_dollars", "0") or "0")
 
-    if open_trade.side == "yes":
-        exit_price = bid
-    else:
-        exit_price = 1.0 - ask
+    db = get_db()
+    row = db.conn.execute(
+        "SELECT * FROM trades WHERE ticker=? AND settled=0 ORDER BY timestamp DESC LIMIT 1",
+        (ticker,),
+    ).fetchone()
+    if not row:
+        return {"error": f"No open position on {ticker}"}
 
-    pnl = round((exit_price - open_trade.entry_price) * open_trade.contracts, 2)
+    trade = dict(row)
+    side = trade["side"]
+    entry_price = trade["entry_price"]
+    contracts = trade["contracts"]
 
-    open_trade.settled = True
-    open_trade.outcome = "win" if pnl > 0 else "loss"
-    open_trade.pnl = pnl
-    open_trade.exit_reasoning = reasoning
+    exit_price = bid if side == "yes" else 1.0 - ask
+    pnl = round((exit_price - entry_price) * contracts, 2)
 
-    portfolio.bankroll = round(portfolio.bankroll + (exit_price * open_trade.contracts), 2)
-    portfolio.total_pnl = round(portfolio.total_pnl + pnl, 2)
-    if pnl > 0:
-        portfolio.wins += 1
-    else:
-        portfolio.losses += 1
-
-    save_portfolio(portfolio)
+    result = db.exit_trade(ticker, exit_price, reasoning)
+    if not result:
+        return {"error": f"DB exit failed for {ticker}"}
 
     return {
         "status": "exited",
         "ticker": ticker,
         "pnl": pnl,
         "exit_price": exit_price,
-        "bankroll": portfolio.bankroll,
+        "bankroll": result["bankroll"],
     }
 
 
 def settle_market(ticker: str, outcome_yes: bool) -> dict:
-    portfolio = load_portfolio()
-
-    for t in reversed(portfolio.trades):
-        if t.ticker == ticker and not t.settled:
-            t.settled = True
-            won = (t.side == "yes" and outcome_yes) or (t.side == "no" and not outcome_yes)
-            if won:
-                t.outcome = "win"
-                t.pnl = round((1.0 - t.entry_price) * t.contracts, 2)
-                portfolio.wins += 1
-            else:
-                t.outcome = "loss"
-                t.pnl = round(-t.entry_price * t.contracts, 2)
-                portfolio.losses += 1
-
-            portfolio.total_pnl = round(portfolio.total_pnl + t.pnl, 2)
-            portfolio.bankroll = round(portfolio.bankroll + t.entry_price * t.contracts + t.pnl, 2)
-            save_portfolio(portfolio)
-
-            return {
-                "status": "settled",
-                "ticker": ticker,
-                "outcome": "yes" if outcome_yes else "no",
-                "result": t.outcome,
-                "pnl": t.pnl,
-                "bankroll": portfolio.bankroll,
-            }
-
-    return {"error": f"No open trade on {ticker}"}
+    db = get_db()
+    result = db.settle_trade(ticker, outcome_yes)
+    if not result:
+        return {"error": f"No open trade on {ticker}"}
+    return {
+        "status": "settled",
+        "ticker": ticker,
+        "outcome": "yes" if outcome_yes else "no",
+        "result": result["outcome"],
+        "pnl": result["pnl"],
+        "bankroll": result["bankroll"],
+    }
 
 
 async def check_settlements() -> list[dict]:
     """Check if any open positions have resolved on Kalshi and auto-settle them."""
     from gossip.kalshi import get_market_detail
 
-    portfolio = load_portfolio()
+    db = get_db()
+    open_trades = db.get_open_positions()
     settled = []
-    for t in portfolio.trades:
-        if t.settled:
-            continue
-        detail = await get_market_detail(t.ticker)
+    for row in open_trades:
+        ticker = row["ticker"]
+        detail = await get_market_detail(ticker)
         market = detail.get("market", {})
         result = market.get("result", "")
         status = market.get("status", "")
         if result in ("yes", "no") or status == "settled":
             outcome_yes = result == "yes"
-            won = (t.side == "yes" and outcome_yes) or (t.side == "no" and not outcome_yes)
-            t.settled = True
-            if won:
-                t.outcome = "win"
-                t.pnl = round((1.0 - t.entry_price) * t.contracts, 2)
-                portfolio.wins += 1
-            else:
-                t.outcome = "loss"
-                t.pnl = round(-t.entry_price * t.contracts, 2)
-                portfolio.losses += 1
-            portfolio.total_pnl = round(portfolio.total_pnl + t.pnl, 2)
-            portfolio.bankroll = round(portfolio.bankroll + t.entry_price * t.contracts + t.pnl, 2)
-            settled.append({
-                "ticker": t.ticker,
-                "result": result,
-                "outcome": t.outcome,
-                "pnl": t.pnl,
-            })
-            log(f"AUTO-SETTLED {t.ticker}: {t.outcome} (pnl: {t.pnl:+.2f})")
-
-    if settled:
-        save_portfolio(portfolio)
+            settle_result = db.settle_trade(ticker, outcome_yes)
+            if settle_result:
+                settled.append({
+                    "ticker": ticker,
+                    "result": result,
+                    "outcome": settle_result["outcome"],
+                    "pnl": settle_result["pnl"],
+                })
+                log(f"AUTO-SETTLED {ticker}: {settle_result['outcome']} (pnl: {settle_result['pnl']:+.2f})")
     return settled
 
 
@@ -479,6 +441,8 @@ async def get_position_prices() -> list[dict]:
     portfolio = load_portfolio()
     positions = []
     for t in portfolio.open_positions:
+        if not isinstance(t, Trade):
+            continue
         detail = await get_market_detail(t.ticker)
         market = detail.get("market", {})
         bid = float(market.get("yes_bid_dollars", "0") or "0")
@@ -625,8 +589,8 @@ async def main():
         print(json.dumps(result, indent=2))
 
     elif args.command == "history":
-        p = load_portfolio()
-        trades = [asdict(t) for t in p.trades[-20:]]
+        db = get_db()
+        trades = db.get_trade_history(limit=20)
         print(json.dumps(trades, indent=2))
 
     elif args.command == "check-settled":

@@ -30,9 +30,9 @@ The Kalshi crowd is retail-heavy and slow. You beat them by:
 Not all edge is equal. Before trading, classify your evidence:
 
 **Hard evidence (trade aggressively):**
-- Event already occurred, market hasn't caught up (e.g. official fired, confirmed by multiple outlets)
+- Event already occurred AND meets Kalshi's settlement criteria (not just announced — check the rules)
 - Authoritative source contradicts market (e.g. official statement, court ruling, data release)
-- Near-arbitrage from settlement lag
+- Near-arbitrage from settlement lag — but ONLY if the settlement rules are clearly satisfied (e.g. "fired" ≠ "departed" if rules require actual vacancy)
 
 **Soft evidence (trade cautiously, require larger edge):**
 - Strong directional signals from multiple credible sources (e.g. "sources say firing imminent")
@@ -45,6 +45,10 @@ Not all edge is equal. Before trading, classify your evidence:
 - Narrative-driven reasoning ("tariff pressure will push gas up") without hard data
 
 A 10pp edge backed by hard evidence is a great trade. A 10pp edge from trend extrapolation on a market expiring tomorrow is a coin flip with bad odds. Know the difference.
+
+## Settlement Rules
+
+Always run `PYTHONPATH=. python3 gossip/kalshi.py rules TICKER` before trading. Kalshi is literal — "fired" ≠ "departed", announcements ≠ events. If your evidence doesn't clearly satisfy the settlement criteria, discount your estimate or pass.
 
 ## What You Don't Do
 

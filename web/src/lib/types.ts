@@ -8,6 +8,7 @@ export interface Portfolio {
   total_news: number;
   total_snapshots: number;
   total_cycles: number;
+  last_cycle_at: string | null;
 }
 
 export interface Trade {

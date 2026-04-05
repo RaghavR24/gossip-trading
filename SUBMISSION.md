@@ -2,7 +2,7 @@
 
 Gossip Trading is a fully autonomous AI agent that scrapes news, reasons about real-world events, and executes real trades on prediction markets — no human in the loop.
 
-Every 15 minutes, Claude Code is spawned as a subprocess with access to the internet, market data, and a trading account. Its job: figure out what's happening in the world, find where markets are wrong, and trade.
+On a configurable interval, Claude Code is spawned as a subprocess with access to the internet, market data, and a trading account. Its job: figure out what's happening in the world, find where markets are wrong, and trade.
 
 ### How it works
 

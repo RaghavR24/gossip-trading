@@ -1,10 +1,10 @@
 # Gossip Trading
 
-**An autonomous AI agent that trades prediction markets by reading the news before the crowd.**
+**You've seen the posts. Someone on X made $1M on Polymarket betting on the election. Another turned $50K into $500K calling the Fed rate decision. We built the agent that does it for you while you sleep.**
 
-Built for the [Entrepreneur First](https://www.joinef.com/) AI Agent Hackathon. Gossip Trading is a fully autonomous system where Claude reasons about real-world events, estimates probabilities, and executes trades on [Kalshi](https://kalshi.com) — with real money.
+Gossip Trading is a fully autonomous AI agent that scrapes news, reasons about real-world events, and executes real trades on prediction markets — no human in the loop.
 
-The "gossip" is the signal. News breaks, rumors spread, data drops — and markets lag. This agent closes the gap.
+On a configurable interval, Claude Code is spawned as a subprocess with access to the internet, market data, and a trading account. Its job: figure out what's happening in the world, find where markets are wrong, and trade.
 
 ![Architecture](architecture.png)
 
@@ -12,14 +12,27 @@ The "gossip" is the signal. News breaks, rumors spread, data drops — and marke
 
 ## How It Works
 
-A human submits a thesis, or the agent self-discovers opportunities. It scrapes news, reads primary sources, estimates probabilities, and trades when it finds edge. No rules engine. No hardcoded strategies. Pure reasoning.
+1. **Scrape** — Pulls real-time signals from Reddit, Twitter/X, TikTok, Truth Social, and Google News via Apify
+2. **Reason** — Claude reads primary sources, cross-references headlines, and estimates true probabilities
+3. **Trade** — When it finds edge, it sizes positions using Kelly criterion and executes real trades on Kalshi
+4. **Learn** — Writes strategy notes for its future self, building memory across cycles
+
+No rules engine. No hardcoded strategies. Pure reasoning — the same kind those Twitter traders use, just faster and tireless.
 
 ```
 "Bondi was fired April 2. Market still at 82¢ YES for 'leaves before Apr 5.'
  That's near-arbitrage. Buying 10 contracts." — Gossip Trading, Cycle 1
 ```
 
-The agent found this on its first run. Bondi's firing was confirmed by CNN, Fox, NPR, NBC, WaPo — but the prediction market hadn't caught up. The agent bought YES at 82¢ for a near-certain $1.00 payout.
+---
+
+## Where the Edge Comes From
+
+The agent is a news agent at its core. It operationalizes information that retail traders skim. It focuses where the edge is richest: legislative markets (retail doesn't read bill text), confusion premiums (headlines create more uncertainty than the details warrant), and resolution lag (events happen before markets update). During our demo, it spotted a market still open on Pam Bondi's AG departure — days after Trump already fired her — and traded on it live.
+
+### Thesis Mode
+
+Have a lead? Type a hypothesis — *"I think tariffs will escalate"* — and the agent researches it, finds relevant markets, and trades on your behalf.
 
 ---
 
@@ -95,21 +108,10 @@ The core insight: **Claude Code IS the agent.** We don't call the Anthropic API.
          │              │  Portfolio + P&L        │
          │              │  Position management    │
          │              │  Market scanner         │
-         │              │  News feed (RSS)        │
+         │              │  News feed              │
          │              │  Thesis submission      │
          │              └─────────────────────────┘
 ```
-
-### Why This Architecture Is Different
-
-| Traditional AI Trading Bot | Gossip Trading |
-|---|---|
-| API calls per inference ($$$) | Claude Code subprocess (zero marginal cost) |
-| Hardcoded strategy rules | LLM reasons about each market independently |
-| Fixed data sources | Agent decides what to search, follows links |
-| Stateless between runs | strategy_notes.md = persistent memory |
-| No self-improvement | Agent writes lessons learned, reads them next cycle |
-| Rule-based entry/exit | Bayesian reasoning with probabilistic edge estimation |
 
 ### The Agentic Loop
 
@@ -124,32 +126,6 @@ Each cycle, the agent:
 7. **Estimates probability** — Bayesian reasoning: base rate → evidence → posterior
 8. **Sizes and executes** — Half-Kelly position sizing with hard risk limits
 9. **Writes memory** — records what it learned for the next cycle
-
-The agent is not following a script. It decides what to research, which markets to skip, when to exit positions, and what's worth remembering. The Python tools are capabilities, not instructions.
-
-### Session Architecture: Fresh Context, Persistent Memory
-
-Every cycle spawns a fresh Claude Code session. No conversation history bloat. But state persists through three mechanisms:
-
-- **SQLite** — trades, portfolio, market snapshots, news, agent logs
-- **strategy_notes.md** — agent-written free-form memory (lessons, observations, market regimes)
-- **SOUL.md** — immutable identity and risk rules the agent reads every session
-
-This gives us the best of both worlds: clean reasoning context + accumulated trading intelligence.
-
----
-
-## The SOUL
-
-Every agent session reads [`SOUL.md`](SOUL.md) first. It defines:
-
-- **Identity** — "You think like a quant at a prop trading firm. You don't guess."
-- **Edge theory** — why the agent beats the crowd (speed, primary sources, math, non-obvious connections)
-- **Thinking framework** — base rates first, Bayesian updating, counterfactual reasoning
-- **Risk discipline** — hard limits the agent cannot override
-- **Anti-patterns** — what the agent explicitly does NOT do (trade on vibes, chase FOMO, hold losers)
-
-The SOUL ensures consistent behavior across sessions without carrying conversation context.
 
 ---
 
@@ -172,11 +148,11 @@ The agent operates within hard guardrails it cannot override:
 
 Real-time Next.js dashboard with:
 
-- **Live agent stream** — watch the agent think, search, and trade in real-time with rendered markdown
-- **Portfolio metrics** — bankroll, realized P&L, unrealized P&L, win rate, trade count
-- **Position cards** — expandable reasoning, live mark-to-market prices, Kalshi links
+- **Live agent stream** — watch the agent think, search, and trade in real-time
+- **Portfolio metrics** — bankroll, P&L, win rate, trade count
+- **Position management** — expandable reasoning, live prices, Kalshi links
 - **Market scanner** — sortable table of active Kalshi markets
-- **News feed** — live Google News RSS with source favicons
+- **Multi-source news feed** — Twitter/X, Truth Social, Reddit, TikTok, Google News
 - **Thesis input** — submit a trading thesis for the agent to research
 - **Agent control** — run cycles, start loops, configure interval
 
@@ -207,16 +183,10 @@ cd web && npm run dev
 # → http://localhost:3000
 ```
 
-## Stack
+## Built With
 
-| Layer | Technology |
-|-------|-----------|
-| Reasoning engine | Claude Code CLI (Paperclip pattern) |
-| Market data | Kalshi REST API (RSA-PSS authenticated) |
-| News ingestion | Google News RSS, Apify scrapers, native web search |
-| Trading engine | Python — Kelly sizing, orderbook pricing, risk checks |
-| Persistence | SQLite (WAL mode) + JSON + Markdown |
-| Dashboard | Next.js 16, React 19, Tailwind CSS, TypeScript |
-| Agent memory | SOUL.md (identity) + strategy_notes.md (experience) |
-
----
+- **Claude Code** as the autonomous brain (subprocess orchestration via `--print`)
+- **Apify** for real-time news and social media scraping
+- **Kalshi API** for live market data and order execution
+- **Next.js dashboard** with live agent streaming, portfolio tracking, and multi-source news feeds
+- **SQLite** for all state — trades, news, market snapshots, agent logs

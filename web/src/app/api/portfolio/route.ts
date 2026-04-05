@@ -30,9 +30,12 @@ export async function GET() {
   const totalCycles = hasLogs
     ? (db.prepare("SELECT COUNT(*) as count FROM agent_logs").get() as { count: number })?.count ?? 0
     : 0;
+  const lastCycleAt = hasLogs
+    ? (db.prepare("SELECT timestamp FROM agent_logs ORDER BY id DESC LIMIT 1").get() as { timestamp: string } | undefined)?.timestamp ?? null
+    : null;
 
   const defaults = {
-    bankroll: 15,
+    bankroll: parseFloat(process.env.BANKROLL || "15"),
     total_pnl: 0,
     total_trades: 0,
     wins: 0,
@@ -46,5 +49,6 @@ export async function GET() {
     total_news: totalNews,
     total_snapshots: totalSnapshots,
     total_cycles: totalCycles,
+    last_cycle_at: lastCycleAt,
   });
 }

@@ -38,7 +38,7 @@ cd web && npm run dev  # http://localhost:3000
 | `SOUL.md` | Agent personality, strategy, risk rules |
 | `SPEC.md` | Full technical spec |
 | `main.py` | Orchestrator — spawns Claude Code, handles prompts, streams output |
-| `gossip/kalshi.py` | Kalshi API: `quick` (fast scan), `scan` (deep), `market`, `orderbook`, `search`, `order` |
+| `gossip/kalshi.py` | Kalshi API: `quick` (fast scan), `scan` (deep), `market`, `orderbook`, `search`, `rules`, `order` |
 | `gossip/news.py` | Apify: Google News, Twitter, web search, article extraction |
 | `gossip/trader.py` | Paper trading, Kelly sizing, portfolio, risk checks |
 | `gossip/db.py` | SQLite schema + queries for trades, news, snapshots, agent logs |
@@ -52,7 +52,8 @@ Always prefix with `PYTHONPATH=.`:
 
 ```bash
 PYTHONPATH=. python3 gossip/kalshi.py quick --limit 40          # fast market scan (~5s)
-PYTHONPATH=. python3 gossip/kalshi.py market TICKER             # market details + orderbook
+PYTHONPATH=. python3 gossip/kalshi.py market TICKER             # market details + orderbook + settlement rules
+PYTHONPATH=. python3 gossip/kalshi.py rules TICKER              # just settlement rules (read before every trade!)
 PYTHONPATH=. python3 gossip/kalshi.py orderbook TICKER          # full orderbook
 PYTHONPATH=. python3 gossip/kalshi.py search "query"            # search events
 
