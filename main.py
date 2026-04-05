@@ -53,22 +53,30 @@ Then run a full trading cycle:
    - `PYTHONPATH=. python3 gossip/kalshi.py quick --sort recent --limit 30` — newest/soonest-closing markets (often mispriced)
    Searching:
    - `PYTHONPATH=. python3 gossip/kalshi.py search "topic"` — search all open events + series by keyword
-   News-driven discovery:
-   - `PYTHONPATH=. python3 gossip/news.py --source google --keywords "topic1,topic2"` — sweep Google News
-   - `PYTHONPATH=. python3 gossip/news.py --source twitter --keywords "topic"` — Twitter/X chatter from journalists and insiders
-   - Web search for breaking news
+   News & social intelligence (via Apify — these give you data WebSearch can't):
+   - `PYTHONPATH=. python3 gossip/news.py --source twitter --keywords "topic"` — real tweets with like/retweet counts, sorted by engagement. See what insiders and journalists are actually saying, not just what Google indexes.
+   - `PYTHONPATH=. python3 gossip/news.py --source truthsocial` — Trump's Truth Social posts. Direct signal for executive action, tariff, and cabinet markets.
+   - `PYTHONPATH=. python3 gossip/news.py --source reddit` — hot posts from r/wallstreetbets, r/politics, r/news, r/economics. Retail sentiment and breaking stories.
+   - `PYTHONPATH=. python3 gossip/news.py --source google --keywords "topic"` — Google News results with URLs for deeper reading.
+   - `PYTHONPATH=. python3 gossip/news.py --source article --urls "url1,url2"` — extract full article text (3000 chars) from URLs you found.
+   - Web search (your built-in tool) — fast for general queries, but gives you snippets only.
+   When to use what:
+   - WebSearch: quick fact-checking, general background. Fast but shallow.
+   - Twitter via news.py: engagement signals, leak chatter, journalist scoops. The delta over WebSearch is seeing WHO is saying it and how many people are amplifying it.
+   - Truth Social: Trump posts move markets directly. Check before any executive action / tariff / cabinet market.
+   - Reddit: retail sentiment gauge, sometimes surfaces stories before mainstream media.
+   - Article extraction: when a web search snippet is ambiguous — get the full 3000 chars to confirm.
    Common patterns that work well:
-   - Scan headlines/news first, then search Kalshi for markets related to what you find
+   - Check Truth Social + Twitter first for political markets, then search Kalshi for related markets
    - Use `quick --sort recent` to spot new markets before they're efficiently priced
    - When you already know a topic is hot, go straight to `search` instead of scanning
    - Skip sports, entertainment, and markets with spread > 15c
 
 3. RESEARCH — pick 3-5 promising markets:
-   - Use web search to find relevant news and primary sources
-   - news.py can add depth when web search snippets aren't enough:
-     `PYTHONPATH=. python3 gossip/news.py --source twitter --keywords "topic"` — insider signals, leak chatter, engagement levels
-     `PYTHONPATH=. python3 gossip/news.py --source article --urls "url1,url2"` — extract full article text (3000 chars) from URLs you found
-     Twitter is especially valuable for political/cabinet markets — leaks surface there first.
+   - Use web search for general background, then news.py for the unique signals:
+     Twitter engagement levels tell you if a story has real momentum or is noise.
+     Truth Social posts are leading indicators for executive actions.
+     Full article text (via --source article) resolves ambiguous snippets.
    - Estimate the true probability based on evidence
    - When a market has related contracts (e.g. different timeframes or outcomes), compare them — pick the one where your edge is best supported by the evidence you actually have
 

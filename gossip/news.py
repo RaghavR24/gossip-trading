@@ -80,36 +80,141 @@ def scrape_google_news(keywords: list[str], hours_back: int = 4, max_results: in
 
 
 def scrape_twitter(keywords: list[str], hours_back: int = 2, max_results: int = 20) -> list[dict]:
-    client = get_client()
-    queries = [f"{kw} min_faves:50" for kw in keywords]
+    """Search Twitter/X via Apify. Uses data-slayer~twitter-search (same actor as dashboard)."""
+    token = os.getenv("APIFY_API_TOKEN", "")
+    if not token:
+        log("WARNING: APIFY_API_TOKEN not set")
+        return []
 
+    query = " OR ".join(f"({kw})" for kw in keywords)
     try:
-        run = client.actor("apidojo/tweet-scraper").call(
-            run_input={
-                "searchTerms": queries,
-                "maxTweets": max_results,
-                "sort": "Latest",
-            },
-            timeout_secs=120,
-        )
+        import urllib.request
+        url = f"https://api.apify.com/v2/acts/data-slayer~twitter-search/run-sync-get-dataset-items?token={token}&timeout=120"
+        req = urllib.request.Request(url, method="POST",
+            data=json.dumps({"query": query, "maxResults": max_results}).encode(),
+            headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=130) as resp:
+            data = json.loads(resp.read())
     except Exception as e:
         log(f"Twitter scrape failed: {e}")
         return []
 
+    if not isinstance(data, list):
+        return []
+
     tweets = []
-    for item in client.dataset(run["defaultDatasetId"]).iterate_items():
+    for item in data:
+        text = item.get("text", "")
+        if not text:
+            continue
+        user_info = item.get("user_info", {})
         tweets.append({
-            "text": item.get("full_text", item.get("text", "")),
-            "author": item.get("author", {}).get("screen_name", ""),
-            "likes": item.get("favorite_count", 0),
-            "retweets": item.get("retweet_count", 0),
-            "url": item.get("url", ""),
+            "text": text,
+            "author": item.get("screen_name", ""),
+            "author_name": user_info.get("name", item.get("screen_name", "")),
+            "likes": item.get("favorites", 0),
+            "retweets": item.get("retweets", 0),
+            "replies": item.get("replies", 0),
+            "url": f"https://x.com/{item.get('screen_name', '')}/status/{item.get('tweet_id', '')}",
             "source": "twitter",
             "created_at": item.get("created_at", ""),
         })
 
     tweets.sort(key=lambda t: t.get("likes", 0), reverse=True)
     return tweets[:max_results]
+
+
+def scrape_truthsocial(username: str = "realDonaldTrump", max_results: int = 25) -> list[dict]:
+    """Scrape Truth Social posts via Apify. Same actor as dashboard."""
+    token = os.getenv("APIFY_API_TOKEN", "")
+    if not token:
+        return []
+
+    try:
+        import urllib.request
+        url = f"https://api.apify.com/v2/acts/muhammetakkurtt~truth-social-scraper/run-sync-get-dataset-items?token={token}&timeout=60"
+        req = urllib.request.Request(url, method="POST",
+            data=json.dumps({"username": username, "maxPosts": max_results}).encode(),
+            headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=70) as resp:
+            data = json.loads(resp.read())
+    except Exception as e:
+        log(f"Truth Social scrape failed: {e}")
+        return []
+
+    if not isinstance(data, list):
+        return []
+
+    import re
+    def strip_html(html: str) -> str:
+        return re.sub(r'<[^>]+>', '', html).replace('&amp;', '&').strip()
+
+    posts = []
+    for item in data:
+        if item.get("visibility") != "public":
+            continue
+        account = item.get("account", {})
+        posts.append({
+            "text": strip_html(item.get("content", "")),
+            "author": account.get("username", username),
+            "likes": item.get("favourites_count", 0),
+            "reposts": item.get("reblogs_count", 0),
+            "url": item.get("url", f"https://truthsocial.com/@{username}/{item.get('id', '')}"),
+            "source": "truthsocial",
+            "created_at": item.get("created_at", ""),
+        })
+
+    return posts[:max_results]
+
+
+def scrape_reddit(subreddits: list[str] | None = None, max_results: int = 40) -> list[dict]:
+    """Scrape Reddit hot posts via Apify. Same actor as dashboard."""
+    token = os.getenv("APIFY_API_TOKEN", "")
+    if not token:
+        return []
+
+    default_subs = [
+        "https://www.reddit.com/r/wallstreetbets/hot/",
+        "https://www.reddit.com/r/politics/hot/",
+        "https://www.reddit.com/r/news/hot/",
+        "https://www.reddit.com/r/worldnews/hot/",
+        "https://www.reddit.com/r/economics/hot/",
+    ]
+    urls = [{"url": u} for u in (subreddits or default_subs)]
+
+    try:
+        import urllib.request
+        url = f"https://api.apify.com/v2/acts/trudax~reddit-scraper-lite/run-sync-get-dataset-items?token={token}&timeout=60"
+        req = urllib.request.Request(url, method="POST",
+            data=json.dumps({"startUrls": urls, "maxItems": 150}).encode(),
+            headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=70) as resp:
+            data = json.loads(resp.read())
+    except Exception as e:
+        log(f"Reddit scrape failed: {e}")
+        return []
+
+    if not isinstance(data, list):
+        return []
+
+    posts = []
+    for item in data:
+        if item.get("dataType") != "post" or not item.get("title"):
+            continue
+        posts.append({
+            "text": item.get("title", ""),
+            "body": (item.get("body", "") or "")[:500],
+            "author": item.get("username", ""),
+            "subreddit": item.get("communityName", ""),
+            "upvotes": item.get("upVotes", 0),
+            "comments": item.get("numberOfComments", 0),
+            "url": item.get("url", ""),
+            "source": "reddit",
+            "created_at": item.get("createdAt", ""),
+        })
+
+    posts.sort(key=lambda p: p.get("upvotes", 0), reverse=True)
+    return posts[:max_results]
 
 
 def scrape_web_search(keywords: list[str], max_results: int = 20) -> list[dict]:
@@ -189,7 +294,7 @@ def main():
     parser = argparse.ArgumentParser(description="News intelligence scraper")
     parser.add_argument("--keywords", type=str, default=None, help="Comma-separated keywords")
     parser.add_argument("--hours", type=int, default=4, help="Hours to look back")
-    parser.add_argument("--source", choices=["google", "twitter", "web", "article", "all"], default="google")
+    parser.add_argument("--source", choices=["google", "twitter", "truthsocial", "reddit", "web", "article", "all"], default="google")
     parser.add_argument("--limit", type=int, default=30, help="Max results")
     parser.add_argument("--trending", action="store_true", help="Use base trending keywords")
     parser.add_argument("--urls", type=str, default=None, help="Comma-separated URLs to scrape article text from")
@@ -214,6 +319,10 @@ def main():
         results.extend(scrape_google_news(keywords, args.hours, args.limit))
     if args.source in ("twitter", "all"):
         results.extend(scrape_twitter(keywords, args.hours, args.limit))
+    if args.source in ("truthsocial",):
+        results.extend(scrape_truthsocial())
+    if args.source in ("reddit",):
+        results.extend(scrape_reddit())
     if args.source in ("web", "all"):
         results.extend(scrape_web_search(keywords, args.limit))
 

@@ -57,8 +57,11 @@ PYTHONPATH=. python3 gossip/kalshi.py rules TICKER              # just settlemen
 PYTHONPATH=. python3 gossip/kalshi.py orderbook TICKER          # full orderbook
 PYTHONPATH=. python3 gossip/kalshi.py search "query"            # search events
 
-PYTHONPATH=. python3 gossip/news.py --keywords "bitcoin,tariff" # Google News
-PYTHONPATH=. python3 gossip/news.py --source twitter --keywords "crypto"
+PYTHONPATH=. python3 gossip/news.py --keywords "bitcoin,tariff"          # Google News
+PYTHONPATH=. python3 gossip/news.py --source twitter --keywords "crypto"  # Twitter with engagement data
+PYTHONPATH=. python3 gossip/news.py --source truthsocial                  # Trump's Truth Social posts
+PYTHONPATH=. python3 gossip/news.py --source reddit                       # Hot posts from WSB, politics, news, economics
+PYTHONPATH=. python3 gossip/news.py --source article --urls "url1,url2"   # Full article text extraction
 
 PYTHONPATH=. python3 gossip/trader.py portfolio                 # positions + P&L
 PYTHONPATH=. python3 gossip/trader.py trade TICKER --side yes --estimate 0.72 --confidence high --reasoning "..."
