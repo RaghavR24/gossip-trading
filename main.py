@@ -48,10 +48,10 @@ Then run a full trading cycle:
 
 2. MARKET DISCOVERY — you have several tools, use whichever combination fits:
    Scanning:
-   - `PYTHONPATH=. python3 gossip/kalshi.py quick --limit 40` — broad overview (default: mixed sort). Note: output shows top N of thousands — use --limit, --sort, --exclude, --categories, or search to explore further.
-   - `PYTHONPATH=. python3 gossip/kalshi.py quick --sort volume --limit 30` — most liquid markets
-   - `PYTHONPATH=. python3 gossip/kalshi.py quick --sort recent --limit 30` — newest/soonest-closing markets (often mispriced)
-   - Filter by category: `--categories Politics,Economics` (include only) or `--exclude Sports,Entertainment` (skip these)
+   - `PYTHONPATH=. python3 gossip/kalshi.py quick` — broad overview (default: 65 markets, mixed sort). Scans all 6000+ events.
+   - `PYTHONPATH=. python3 gossip/kalshi.py quick --sort volume` — most liquid markets
+   - `PYTHONPATH=. python3 gossip/kalshi.py quick --sort recent` — newest/soonest-closing markets (often mispriced)
+   - Scan results are dominated by sports (~60% of Kalshi). Use `--exclude Sports,Entertainment` to see politics/economics/crypto, or `--categories Politics,Economics` to focus on specific areas.
    - Available categories: Sports, Crypto, Financials, Entertainment, Economics, Climate and Weather, Mentions, Science and Technology, Politics, Elections, Companies, World
    Searching:
    - `PYTHONPATH=. python3 gossip/kalshi.py search "topic"` — search all open events + series by keyword
@@ -249,6 +249,27 @@ def run_agent(prompt: str, timeout: int = 600) -> dict:
         )
     except Exception:
         pass
+
+    # Post-cycle review
+    if cycle_result["status"] == "ok":
+        try:
+            from gossip.reviewer import parse_trace, run_checks, run_llm_review, save_review
+            write_status("reviewing")
+            trace = parse_trace(LIVE_LOG)
+            checks = run_checks(trace)
+            passed = sum(1 for c in checks if c.passed)
+            print(f"  Review: {passed}/{len(checks)} checks passed", file=sys.stderr)
+            for c in checks:
+                icon = "✓" if c.passed else "✗"
+                print(f"    {icon} {c.name}: {c.detail}", file=sys.stderr)
+
+            review_text = run_llm_review(trace, checks)
+            review_path = save_review(review_text, checks, trace)
+            print(f"  Review saved: {review_path}", file=sys.stderr)
+            cycle_result["review_file"] = str(review_path)
+            cycle_result["checks_passed"] = f"{passed}/{len(checks)}"
+        except Exception as e:
+            print(f"  Review failed: {e}", file=sys.stderr)
 
     return cycle_result
 

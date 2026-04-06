@@ -9,3 +9,4 @@ data/*.db
 *.db
 .DS_Store
 Dev_notes.md
+data/reviews/

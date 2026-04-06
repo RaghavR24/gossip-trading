@@ -301,13 +301,14 @@ async def execute_trade(
         sources=sources or [],
     )
 
-    # Live execution if enabled
-    live_trading = os.getenv("LIVE_TRADING", "false").lower() == "true"
+    # Live execution if enabled — read from .env file directly, not overridable via CLI env
+    from dotenv import dotenv_values
+    _env = dotenv_values(Path(__file__).resolve().parent.parent / ".env")
+    live_trading = _env.get("LIVE_TRADING", "false").lower() == "true"
     order_result = None
     if live_trading:
         from gossip.kalshi import place_order
-        price_cents = int(entry_price * 100)
-        max_cost_cents = int((cost + fee + 0.05) * 100)
+        price_cents = int(entry_price * 100) if side == "yes" else int((1 - entry_price) * 100)
         order_result = await place_order(
             ticker=ticker,
             action="buy",
@@ -315,8 +316,6 @@ async def execute_trade(
             count=contracts,
             price_cents=price_cents,
             order_type="limit",
-            buy_max_cost=max_cost_cents,
-            sell_position_floor=0,
         )
         if "error" in order_result:
             return {"error": f"Live order failed: {order_result}", "mode": "live"}
@@ -545,7 +544,7 @@ async def main():
             market = detail.get("market", {})
             bid = float(market.get("yes_bid_dollars", "0") or "0")
             ask = float(market.get("yes_ask_dollars", "0") or "0")
-            market_price = ask if args.side == "yes" else (1 - bid)
+            market_price = ask if args.side == "yes" else bid
             p = load_portfolio()
             sizing = kelly_size(args.estimate, market_price, p.bankroll, args.side)
             contracts = sizing["contracts"]
@@ -579,7 +578,7 @@ async def main():
         market = detail.get("market", {})
         bid = float(market.get("yes_bid_dollars", "0") or "0")
         ask = float(market.get("yes_ask_dollars", "0") or "0")
-        market_price = ask if args.side == "yes" else (1 - bid)
+        market_price = ask if args.side == "yes" else bid
         p = load_portfolio()
         result = kelly_size(args.estimate, market_price, p.bankroll, args.side)
         result["ticker"] = args.ticker

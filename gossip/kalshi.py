@@ -94,11 +94,11 @@ BASE_DELAY = 1.0
 async def api_get(session: aiohttp.ClientSession, path: str, params: dict | None = None, auth: bool = False) -> dict:
     base = get_base_url()
     url = f"{base}{path}"
-    headers = {"Accept-Encoding": "gzip", "Content-Type": "application/json"}
-    if auth:
-        headers.update(build_auth_headers("GET", f"/trade-api/v2{path}"))
 
     for attempt in range(MAX_RETRIES + 1):
+        headers = {"Accept-Encoding": "gzip", "Content-Type": "application/json"}
+        if auth:
+            headers.update(build_auth_headers("GET", f"/trade-api/v2{path}"))
         try:
             async with session.get(url, params=params, headers=headers) as resp:
                 text = await resp.text()
@@ -119,10 +119,10 @@ async def api_get(session: aiohttp.ClientSession, path: str, params: dict | None
 
 async def api_post(session: aiohttp.ClientSession, path: str, body: dict) -> dict:
     url = f"{get_base_url()}{path}"
-    headers = {"Content-Type": "application/json"}
-    headers.update(build_auth_headers("POST", f"/trade-api/v2{path}"))
 
     for attempt in range(MAX_RETRIES + 1):
+        headers = {"Content-Type": "application/json"}
+        headers.update(build_auth_headers("POST", f"/trade-api/v2{path}"))
         try:
             async with session.post(url, json=body, headers=headers) as resp:
                 text = await resp.text()
@@ -141,14 +141,27 @@ async def api_post(session: aiohttp.ClientSession, path: str, body: dict) -> dic
 
 async def api_delete(session: aiohttp.ClientSession, path: str, body: dict | None = None) -> dict:
     url = f"{get_base_url()}{path}"
-    headers = {"Content-Type": "application/json"}
-    headers.update(build_auth_headers("DELETE", f"/trade-api/v2{path}"))
 
-    async with session.delete(url, json=body, headers=headers) as resp:
-        text = await resp.text()
-        if resp.status >= 400:
-            return {"error": f"HTTP {resp.status}", "body": text[:500]}
-        return json.loads(text) if text else {}
+    for attempt in range(MAX_RETRIES + 1):
+        headers = {"Content-Type": "application/json"}
+        headers.update(build_auth_headers("DELETE", f"/trade-api/v2{path}"))
+        try:
+            async with session.delete(url, json=body, headers=headers) as resp:
+                text = await resp.text()
+                if resp.status == 429 and attempt < MAX_RETRIES:
+                    delay = BASE_DELAY * (2 ** attempt)
+                    log(f"Rate limited, retrying in {delay:.0f}s...")
+                    await asyncio.sleep(delay)
+                    continue
+                if resp.status >= 400:
+                    return {"error": f"HTTP {resp.status}", "body": text[:500]}
+                return json.loads(text) if text else {}
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            if attempt < MAX_RETRIES:
+                await asyncio.sleep(BASE_DELAY * (2 ** attempt))
+                continue
+            return {"error": str(e)}
+    return {"error": "max retries exceeded"}
 
 # --- Market scanning ---
 
@@ -482,6 +495,8 @@ async def quick_scan(categories: set[str] | None = None, exclude_categories: set
         return all_markets
 
 
+
+
 async def get_event_markets(event_ticker: str) -> list[dict]:
     async with aiohttp.ClientSession() as session:
         data = await api_get(session, "/markets", {
@@ -511,6 +526,7 @@ async def place_order(
     }
     if price_cents is not None:
         body["yes_price"] = price_cents
+        body["dollar_price"] = f"{price_cents / 100:.2f}"
     if buy_max_cost is not None:
         body["buy_max_cost"] = buy_max_cost
     if sell_position_floor is not None:
@@ -555,7 +571,7 @@ async def main():
     quick_p.add_argument("--days", type=int, default=30)
     quick_p.add_argument("--min-volume", type=float, default=0)
     quick_p.add_argument("--sort", choices=["volume", "recent", "mixed"], default="mixed")
-    quick_p.add_argument("--limit", type=int, default=50)
+    quick_p.add_argument("--limit", type=int, default=65)
 
     market_p = sub.add_parser("market", help="Get market details")
     market_p.add_argument("ticker")
@@ -627,7 +643,8 @@ async def main():
                 "showing": len(results),
                 "total_found": len(markets),
                 "sort": args.sort,
-                "hint": f"Showing top {len(results)} of {len(markets)} markets (sorted by {args.sort}). Use --limit N for more, --sort volume/recent/mixed to change ranking, or `search \"keyword\"` to find specific topics.",
+                "excluded": sorted(excl) if excl else [],
+                "hint": f"Showing top {len(results)} of {len(markets)} markets (sorted by {args.sort}, excluding {', '.join(sorted(excl)) if excl else 'nothing'}). Use --limit N for more, --sort volume/recent/mixed, --exclude/--categories to filter, or `search \"keyword\"` for specific topics.",
             },
             "markets": results,
         }
